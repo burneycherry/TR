@@ -240,7 +240,7 @@
     const phaseKva = mode === 'three' ? kva / 3 : (mode === 'scott' ? kva / 2 : kva);
     const col = v2 <= 150 ? 0 : (v2 <= 300 ? 1 : 2);
     const E = D.eb;
-    const res = { phaseKva: phaseKva, voltClass: ['100V級', '200V級', '400V級'][col], sq: null, sizeUp: [], verified: E.verified };
+    const res = { phaseKva: phaseKva, voltClass: ['100V級', '200V級', '400V級'][col], sq: null, sizeUp: [], t2Max: E.table2[E.table2.length - 1][0], verified: E.verified };
     for (let i = 0; i < E.table.length; i++) {
       if (phaseKva <= E.table[i][col]) { res.sq = E.table[i][3]; break; }
     }
@@ -253,7 +253,7 @@
         const from = j > 0 ? E.table2[j - 1][0] : 0;
         if (t[2] > res.sq) {
           if (maxA > 0 && from >= maxA) { break; }
-          res.sizeUp.push({ from: from, to: maxA > 0 ? Math.min(t[0], maxA) : t[0], label: t[1] });
+          res.sizeUp.push({ from: from, to: maxA > 0 ? Math.min(t[0], maxA) : t[0], label: t[1], r4: t[3] === 'R4' });
         } else {
           res.baseMax = t[0];
         }

@@ -260,16 +260,17 @@
         if (e.sizeUp.length) {
           up = '<p class="sub-note"><strong>分岐（主幹）ブレーカーのサイズによりサイズアップ</strong>（表2.13.2）<br>' +
             'ブレーカー ' + e.baseMax + 'A以下：' + esc(e.label) + '（表2.13.1のまま）<br>' +
-            e.sizeUp.map(function (u) { return esc(u.from + 'A超〜' + u.to + 'A：' + u.label); }).join('<br>') +
-            (e.maxA > 1000 ? '<br>1000A超：表2.13.2 範囲外（個別検討）' : '') +
+            e.sizeUp.map(function (u) { return esc(u.from + 'A超〜' + u.to + 'A：' + u.label + (u.r4 ? '（令和4年版 表2.13.2 参考）' : '')); }).join('<br>') +
+            (e.maxA > e.t2Max ? '<br>' + e.t2Max + 'A超：表2.13.2 範囲外（個別検討）' : '') +
             '<br>' + note('想定する最大：' + esc(who)) + '</p>';
-        } else if (e.baseMax >= 1000) {
-          up = '<p class="sub-note">表2.13.2（〜1000A）より太いため、ブレーカーのサイズによるサイズアップなし</p>';
+        } else if (e.baseMax >= e.t2Max) {
+          up = '<p class="sub-note">表2.13.2（〜' + e.t2Max + 'A）より太いため、ブレーカーのサイズによるサイズアップなし</p>';
         } else {
           up = '<p class="sub-note">' + esc(who) + ' ≤ ' + e.baseMax + 'A のため、ブレーカーのサイズによるサイズアップなし</p>';
         }
       }
-      const upTxt = e.sizeUp.map(function (u) { return u.from + 'A超' + (u.to > u.from ? '〜' + u.to + 'A' : '') + ' → ' + u.label; });
+      const upTxt = e.sizeUp.map(function (u) { return u.from + 'A超' + (u.to > u.from ? '〜' + u.to + 'A' : '') + ' → ' + u.label + (u.r4 ? '（令和4年版）' : ''); });
+      if (e.sq !== null && e.maxA > e.t2Max) { upTxt.push(e.t2Max + 'A超 → 個別検討'); }
       const upLine = upTxt.length ? '<span class="up">⚠ サイズアップ有<br>' + upTxt.map(esc).join('<br>') + '</span>' : '';
       const eb = '<div class="kv">' + kvItem('EB 接地線', (e.label ? esc(e.label) : '個別検討') + upLine, '') +
         kvItem('一相分容量', fmt(e.phaseKva, 1), 'kVA') + '</div>' +

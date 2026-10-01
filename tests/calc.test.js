@@ -130,7 +130,7 @@ test('EB：表2.13.1 で選定し、ブレーカー定格によるサイズア�
   assert.strictEqual(r20.eb.label, '22mm²');
   assert.strictEqual(r20.eb.maxA, 500);
   assert.deepStrictEqual(r20.eb.sizeUp.map((u) => u.from + '-' + u.to + ':' + u.label), ['400-500:38mm²']);
-  assert.deepStrictEqual(C.selectEB('three', 100, 210).sizeUp.map((u) => u.label), ['22mm²', '38mm²', '60mm²']);
+  assert.deepStrictEqual(C.selectEB('three', 100, 210).sizeUp.map((u) => u.label), ['22mm²', '38mm²', '60mm²', '100mm²', '150mm²']);
   // 単相10kVA：5.5mm²（100A以下）→ 150A以下 8mm² から
   const r0 = C.calculate({ mode: 'single', kva: 10, v1: 6600, v2: 210 });
   assert.strictEqual(r0.eb.label, '5.5mm²');
@@ -138,10 +138,14 @@ test('EB：表2.13.1 で選定し、ブレーカー定格によるサイズア�
   // 二次 47.6A ≤ 100A → サイズアップなし
   assert.strictEqual(r0.eb.sizeUp.length, 0);
   assert.strictEqual(C.selectEB('single', 10, 210).sizeUp[0].label, '8mm²');
-  // 三相1000kVA 210V：100mm² は表2.13.2 最大(60)より太い → サイズアップなし
+  // 三相1000kVA 210V：100mm²。1600A以下 100mm²（令和4年版）はそのまま、2500A以下 150mm²（令和4年版）でサイズアップ
   const r2 = C.selectEB('three', 1000, 210);
   assert.strictEqual(r2.label, '100mm²');
-  assert.strictEqual(r2.sizeUp.length, 0);
+  assert.strictEqual(r2.baseMax, 1600);
+  assert.deepStrictEqual(r2.sizeUp.map((u) => u.from + '-' + u.to + ':' + u.label + ':' + u.r4), ['1600-2500:150mm²:true']);
+  assert.strictEqual(C.selectEB('three', 1000, 210, 2000).sizeUp[0].to, 2000);
+  // 三相1500kVA 210V：一相500kVA → 150mm²（表2.13.2 最大 2500A 150mm² と同じ）→ サイズアップなし
+  assert.strictEqual(C.selectEB('three', 1500, 210).sizeUp.length, 0);
 });
 
 test('標準容量（日立ラインアップ／単相750・1000追加）', () => {
