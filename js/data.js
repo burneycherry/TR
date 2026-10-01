@@ -7,7 +7,7 @@
  * verified: true にした項目は画面上の「要確認」バッジが消えます。
  */
 var TR_DATA = {
-  version: '2026-10-01d',
+  version: '2026-10-01e',
 
   // 標準容量 [kVA]（入力候補）
   capacities: {
@@ -208,73 +208,87 @@ var TR_DATA = {
     verified: true
   },
 
-  // 主幹ブレーカー
-  // icu: [AC230V級, AC440V級] kA（定格限界短絡遮断容量 Icu の目安）
+  // 主幹ブレーカー（メーカーカタログ転記）
+  // icu: [AC230V級, AC440V級] kA（定格限界短絡遮断容量 Icu）
   breaker: {
     factor: 1.0, // 定格電流 ≥ 二次定格電流 × factor
     primaryFactor: 1.25, // 低圧/低圧変圧器の一次側：定格電流 ≥ 一次定格電流 × primaryFactor（励磁突入電流は別途確認）
     makers: {
+      // 三菱 WS-Vシリーズ 低圧遮断器総合カタログ（Y-0701, 25A版）仕様一覧表より転記
+      // icu: JIS C 8201-2-1 Ann.1 の [AC230V, AC440V] Icu。ACB は [AC240V, AC440V]
+      // 定格電流の「可調整」品は設定可能値を ratings に列挙
       mitsubishi: {
         name: '三菱電機',
         series: 'WS-V / AE-SW',
+        source: '三菱 WS-Vシリーズ カタログ Y-0701（25A版）',
         list: [
-          { model: 'NF63-CV', af: 63, ratings: [15, 20, 30, 40, 50, 60, 63], icu: [7.5, 2.5] },
-          { model: 'NF63-SV', af: 63, ratings: [15, 20, 30, 40, 50, 60, 63], icu: [15, 7.5] },
-          { model: 'NF63-HV', af: 63, ratings: [15, 20, 30, 40, 50, 60, 63], icu: [100, 50] },
-          { model: 'NF125-CV', af: 125, ratings: [75, 100, 125], icu: [30, 10] },
-          { model: 'NF125-SV', af: 125, ratings: [75, 100, 125], icu: [50, 30] },
-          { model: 'NF125-HV', af: 125, ratings: [75, 100, 125], icu: [100, 50] },
-          { model: 'NF250-CV', af: 250, ratings: [150, 175, 200, 225, 250], icu: [36, 15] },
-          { model: 'NF250-SV', af: 250, ratings: [150, 175, 200, 225, 250], icu: [85, 36] },
-          { model: 'NF250-HV', af: 250, ratings: [150, 175, 200, 225, 250], icu: [125, 65] },
-          { model: 'NF400-CW', af: 400, ratings: [300, 350, 400], icu: [50, 25] },
-          { model: 'NF400-SW', af: 400, ratings: [300, 350, 400], icu: [85, 45] },
-          { model: 'NF400-HEW', af: 400, ratings: [300, 350, 400], icu: [125, 70] },
+          { model: 'NF63-CV', af: 63, ratings: [10, 15, 20, 30, 40, 50, 60, 63], icu: [7.5, 2.5] },
+          { model: 'NF63-SV', af: 63, ratings: [10, 15, 20, 30, 40, 50, 60, 63], icu: [15, 7.5] },
+          { model: 'NF63-HV', af: 63, ratings: [10, 15, 20, 30, 40, 50, 60, 63], icu: [25, 10] },
+          { model: 'NF125-CV', af: 125, ratings: [50, 60, 75, 100, 125], icu: [30, 10] },
+          { model: 'NF125-SV', af: 125, ratings: [15, 20, 30, 40, 50, 60, 75, 100, 125], icu: [50, 25] },
+          { model: 'NF125-HV', af: 125, ratings: [15, 20, 30, 40, 50, 60, 75, 100, 125], icu: [100, 50] },
+          { model: 'NF250-CV', af: 250, ratings: [125, 150, 175, 200, 225, 250], icu: [36, 15] },
+          { model: 'NF250-SV', af: 250, ratings: [125, 150, 175, 200, 225, 250], icu: [85, 36] },
+          { model: 'NF250-HV', af: 250, ratings: [125, 150, 175, 200, 225, 250], icu: [100, 65] },
+          { model: 'NF400-CW', af: 400, ratings: [250, 300, 350, 400], icu: [50, 25] },
+          { model: 'NF400-SW', af: 400, ratings: [250, 300, 350, 400], icu: [85, 42] },
+          { model: 'NF400-HEW', af: 400, ratings: [200, 225, 250, 300, 350, 400], icu: [100, 65] },
           { model: 'NF630-CW', af: 630, ratings: [500, 600, 630], icu: [50, 36] },
-          { model: 'NF630-SW', af: 630, ratings: [500, 600, 630], icu: [85, 50] },
-          { model: 'NF800-CEW', af: 800, ratings: [700, 800], icu: [50, 36] },
-          { model: 'NF800-SEW', af: 800, ratings: [700, 800], icu: [85, 50] },
-          { model: 'NF1000-SEW', af: 1000, ratings: [1000], icu: [85, 65] },
-          { model: 'NF1250-SEW', af: 1250, ratings: [1200, 1250], icu: [85, 65] },
-          { model: 'NF1600-SEW', af: 1600, ratings: [1400, 1500, 1600], icu: [85, 65] },
+          { model: 'NF630-SW', af: 630, ratings: [500, 600, 630], icu: [85, 42] },
+          { model: 'NF630-HEW', af: 630, ratings: [300, 350, 400, 450, 500, 600, 630], icu: [100, 65] },
+          { model: 'NF800-CEW', af: 800, ratings: [400, 450, 500, 600, 700, 800], icu: [50, 36] },
+          { model: 'NF800-SEW', af: 800, ratings: [400, 450, 500, 600, 700, 800], icu: [85, 42] },
+          { model: 'NF800-HEW', af: 800, ratings: [400, 450, 500, 600, 700, 800], icu: [100, 65] },
+          { model: 'NF1000-SEW', af: 1000, ratings: [500, 600, 700, 800, 900, 1000], icu: [125, 85] },
+          { model: 'NF1250-SEW', af: 1250, ratings: [600, 700, 800, 1000, 1200, 1250], icu: [125, 85] },
+          { model: 'NF1600-SEW', af: 1600, ratings: [800, 1000, 1200, 1400, 1500, 1600], icu: [125, 85] },
+          { model: 'AE2000-SWA (ACB)', af: 2000, ratings: [2000], icu: [65, 65] },
           { model: 'AE2000-SW (ACB)', af: 2000, ratings: [2000], icu: [85, 85] },
           { model: 'AE2500-SW (ACB)', af: 2500, ratings: [2500], icu: [85, 85] },
           { model: 'AE3200-SW (ACB)', af: 3200, ratings: [3200], icu: [85, 85] },
-          { model: 'AE4000-SW (ACB)', af: 4000, ratings: [4000], icu: [100, 100] },
-          { model: 'AE5000-SW (ACB)', af: 5000, ratings: [5000], icu: [100, 100] },
-          { model: 'AE6300-SW (ACB)', af: 6300, ratings: [6300], icu: [120, 120] }
+          { model: 'AE4000-SWA (ACB)', af: 4000, ratings: [4000], icu: [85, 85] },
+          { model: 'AE4000-SW (ACB)', af: 4000, ratings: [4000], icu: [130, 130] },
+          { model: 'AE5000-SW (ACB)', af: 5000, ratings: [5000], icu: [130, 130] },
+          { model: 'AE6300-SW (ACB)', af: 6300, ratings: [6300], icu: [130, 130] }
         ],
-        verified: false
+        verified: true
       },
+      // 富士 オートブレーカ・漏電遮断器 G-TWINシリーズ 32AF〜800AF カタログ（EH140c）仕様より転記
+      // icu: JIS C 8201-2-1 の [240/230V, 440/415V] Icu（400AF 以上は EN60947-2 欄）
       fuji: {
         name: '富士電機',
-        series: 'G-TWIN / ACB',
+        series: 'G-TWIN',
+        source: '富士 G-TWINシリーズ カタログ EH140c',
         list: [
-          { model: 'BW63EAG', af: 63, ratings: [15, 20, 30, 40, 50, 60, 63], icu: [7.5, 2.5] },
-          { model: 'BW63SAG', af: 63, ratings: [15, 20, 30, 40, 50, 60, 63], icu: [15, 7.5] },
-          { model: 'BW63RAG', af: 63, ratings: [15, 20, 30, 40, 50, 60, 63], icu: [25, 10] },
-          { model: 'BW125JAG', af: 125, ratings: [75, 100, 125], icu: [30, 15] },
-          { model: 'BW125RAG', af: 125, ratings: [75, 100, 125], icu: [50, 25] },
-          { model: 'BW250EAG', af: 250, ratings: [150, 175, 200, 225, 250], icu: [36, 18] },
-          { model: 'BW250RAG', af: 250, ratings: [150, 175, 200, 225, 250], icu: [85, 36] },
-          { model: 'BW250HAG', af: 250, ratings: [150, 175, 200, 225, 250], icu: [125, 65] },
-          { model: 'BW400EAG', af: 400, ratings: [300, 350, 400], icu: [50, 30] },
-          { model: 'BW400RAG', af: 400, ratings: [300, 350, 400], icu: [100, 50] },
-          { model: 'BW400HAG', af: 400, ratings: [300, 350, 400], icu: [125, 70] },
+          { model: 'BW50EAG', af: 50, ratings: [5, 10, 15, 20, 30, 32, 40, 50], icu: [5, 2.5] },
+          { model: 'BW50SAG', af: 50, ratings: [5, 10, 15, 20, 30, 32, 40, 50], icu: [10, 7.5] },
+          { model: 'BW50RAG', af: 50, ratings: [10, 15, 20, 30, 32, 40, 50], icu: [25, 10] },
+          { model: 'BW50HAG', af: 50, ratings: [15, 20, 30, 40, 50], icu: [125, 65] },
+          { model: 'BW63EAG', af: 63, ratings: [60, 63], icu: [5, 2.5] },
+          { model: 'BW63SAG', af: 63, ratings: [60, 63], icu: [10, 7.5] },
+          { model: 'BW63RAG', af: 63, ratings: [60, 63], icu: [25, 10] },
+          { model: 'BW100EAG', af: 100, ratings: [50, 60, 63, 75, 100], icu: [25, 10] },
+          { model: 'BW125JAG', af: 125, ratings: [15, 20, 30, 40, 50, 60, 75, 100, 125], icu: [50, 30] },
+          { model: 'BW125RAG', af: 125, ratings: [15, 20, 30, 40, 50, 60, 75, 100, 125], icu: [100, 50] },
+          { model: 'BW125HAG', af: 125, ratings: [15, 20, 30, 40, 50, 60, 75, 100, 125], icu: [125, 65] },
+          { model: 'BW250EAG', af: 250, ratings: [125, 150, 160, 175, 200, 225, 250], icu: [36, 18] },
+          { model: 'BW250JAG', af: 250, ratings: [125, 150, 160, 175, 200, 225, 250], icu: [50, 30] },
+          { model: 'BW250RAG', af: 250, ratings: [125, 150, 160, 175, 200, 225, 250], icu: [100, 50] },
+          { model: 'BW250HAG', af: 250, ratings: [125, 150, 160, 175, 200, 225, 250], icu: [125, 65] },
+          { model: 'BW400EAG', af: 400, ratings: [250, 300, 350, 400], icu: [50, 30] },
+          { model: 'BW400SAG', af: 400, ratings: [250, 300, 350, 400], icu: [85, 36] },
+          { model: 'BW400RAG', af: 400, ratings: [250, 300, 350, 400], icu: [100, 50] },
+          { model: 'BW400HAG', af: 400, ratings: [250, 300, 350, 400], icu: [125, 70] },
           { model: 'BW630EAG', af: 630, ratings: [500, 600, 630], icu: [50, 36] },
           { model: 'BW630RAG', af: 630, ratings: [500, 600, 630], icu: [100, 50] },
+          { model: 'BW630HAG', af: 630, ratings: [500, 600, 630], icu: [125, 70] },
           { model: 'BW800EAG', af: 800, ratings: [700, 800], icu: [50, 36] },
           { model: 'BW800RAG', af: 800, ratings: [700, 800], icu: [100, 50] },
-          { model: 'ACB 1250AF', af: 1250, ratings: [1000, 1250], icu: [65, 65] },
-          { model: 'ACB 1600AF', af: 1600, ratings: [1600], icu: [65, 65] },
-          { model: 'ACB 2000AF', af: 2000, ratings: [2000], icu: [80, 80] },
-          { model: 'ACB 2500AF', af: 2500, ratings: [2500], icu: [80, 80] },
-          { model: 'ACB 3200AF', af: 3200, ratings: [3200], icu: [80, 80] },
-          { model: 'ACB 4000AF', af: 4000, ratings: [4000], icu: [100, 100] },
-          { model: 'ACB 5000AF', af: 5000, ratings: [5000], icu: [100, 100] },
-          { model: 'ACB 6300AF', af: 6300, ratings: [6300], icu: [100, 100] }
+          { model: 'BW800HAG', af: 800, ratings: [700, 800], icu: [125, 70] }
         ],
-        verified: false
+        overNote: '800AF超は富士電機のカタログ範囲外（ACB等を個別選定）',
+        verified: true
       }
     }
   }

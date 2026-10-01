@@ -159,6 +159,32 @@ test('THR 整定値は常に換算値以下（切り捨て）', () => {
   }
 });
 
+test('主幹ブレーカー：カタログ転記値で選定', () => {
+  const pick = (o) => {
+    const r = C.calculate(Object.assign({ v1: 6600 }, o)).breaker.makers;
+    return [r.mitsubishi.pick && r.mitsubishi.pick.model + ' ' + r.mitsubishi.pick.rating,
+      r.fuji.pick && r.fuji.pick.model + ' ' + r.fuji.pick.rating];
+  };
+  // 三相100kVA 210V：274.9A・11.95kA
+  assert.deepStrictEqual(pick({ mode: 'three', kva: 100, v2: 210 }), ['NF400-CW 300', 'BW400EAG 300']);
+  // 単相100kVA 210V：476.2A・20.7kA
+  assert.deepStrictEqual(pick({ mode: 'single', kva: 100, v2: 210 }), ['NF630-CW 500', 'BW630EAG 500']);
+  // 三相500kVA 440V：656A・18.7kA(440V級)
+  assert.deepStrictEqual(pick({ mode: 'three', kva: 500, v2: 440 }), ['NF800-CEW 700', 'BW800EAG 700']);
+  // 三相300kVA 210V：824.8A → 富士は800AF超でカタログ範囲外
+  assert.deepStrictEqual(pick({ mode: 'three', kva: 300, v2: 210 }), ['NF1000-SEW 900', null]);
+  // 遮断容量で上位グレードへ：三相150kVA 210V %Z1.0 → 412A・41kA
+  assert.deepStrictEqual(pick({ mode: 'three', kva: 150, v2: 210, z: 1.0 }), ['NF630-CW 500', 'BW630EAG 500']);
+  const hi = pick({ mode: 'three', kva: 150, v2: 210, z: 0.5 }); // 82kA
+  assert.deepStrictEqual(hi, ['NF630-SW 500', 'BW630RAG 500']);
+});
+
+test('ブレーカー表はフレーム昇順', () => {
+  Object.values(C.data.breaker.makers).forEach((m) => {
+    m.list.forEach((b, i) => { if (i > 0) { assert.ok(m.list[i - 1].af <= b.af, b.model); } });
+  });
+});
+
 test('電線・銅バーは設計電流以上', () => {
   const r = C.calculate({ phase: 3, kva: 750, v1: 6600, v2: 210 });
   r.conductor.cable.forEach((c) => assert.ok(c.limit * c.parallel >= r.conductor.design, c.name));

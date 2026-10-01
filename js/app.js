@@ -147,7 +147,7 @@
       const m = b.makers[k];
       const p = m.pick;
       const val = p ? '<strong>' + esc(p.model) + ' ' + p.rating + 'AT</strong><br>' + note(esc(m.series) + '　' + p.af + 'AF　Icu ' + p.icu + 'kA（' + b.voltClass + '）')
-        : '<strong>該当なし</strong><br>' + note('上位機種・カスケード遮断等を個別検討');
+        : '<strong>該当なし</strong><br>' + note(esc(m.overNote || '上位機種・カスケード遮断等を個別検討'));
       h += row(esc(m.name), val);
       t.push(label + '(' + m.name + '): ' + (p ? p.model + ' ' + p.rating + 'AT(' + p.af + 'AF) Icu' + p.icu + 'kA' : '該当なし'));
     });
@@ -270,7 +270,7 @@
     }
 
     el.results.innerHTML = html;
-    t.push('※LBSヒューズはカタログ選定表、その他は参考値（要カタログ確認）');
+    t.push('※メーカーカタログ・内線規程・社内規準による選定（data ' + D.version + '）');
     lastText = t.join('\n');
   }
 

@@ -176,7 +176,7 @@
           hit = { model: b.model, af: b.af, rating: r, icu: b.icu[col] };
         }
       }
-      makers[k] = { name: m.name, series: m.series, pick: hit, verified: m.verified };
+      makers[k] = { name: m.name, series: m.series, pick: hit, overNote: m.overNote || '', verified: m.verified };
     });
     return { need: need, iscKa: iscKa, voltClass: col === 0 ? 'AC230V級' : 'AC440V級', makers: makers };
   }
