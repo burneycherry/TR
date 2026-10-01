@@ -218,7 +218,7 @@ test('THR 整定値は常に換算値以下（切り捨て）', () => {
 
 test('主幹ブレーカー：カタログ転記値で選定', () => {
   const pick = (o) => {
-    const r = C.calculate(Object.assign({ v1: 6600, mainBreaker: true }, o)).breaker.makers;
+    const r = C.calculate(Object.assign({ v1: 6600, mainBreaker: true, iscBasis: 'calc' }, o)).breaker.makers;
     return [r.mitsubishi.pick && r.mitsubishi.pick.model + ' ' + r.mitsubishi.pick.rating,
       r.fuji.pick && r.fuji.pick.model + ' ' + r.fuji.pick.rating];
   };
@@ -233,7 +233,7 @@ test('主幹ブレーカー：カタログ転記値で選定', () => {
   // 三相1000kVA 210V：2749A・74.3kA → 三菱MCCBは1600AFまで、富士 BW3200RAE
   assert.deepStrictEqual(pick({ mode: 'three', kva: 1000, v2: 210 }), [null, 'BW3200RAE 2800']);
   const acb = (o) => {
-    const r = C.calculate(Object.assign({ v1: 6600, mainBreaker: true }, o)).breaker.makers;
+    const r = C.calculate(Object.assign({ v1: 6600, mainBreaker: true, iscBasis: 'calc' }, o)).breaker.makers;
     return [r.mitsubishi.acb && r.mitsubishi.acb.model, r.fuji.acb && r.fuji.acb.model];
   };
   assert.deepStrictEqual(acb({ mode: 'three', kva: 1000, v2: 210 }), ['AE3200-SW', 'DH30']);
@@ -262,18 +262,18 @@ test('主幹ブレーカーは既定で不要、幹線は二次定格電流基�
 });
 
 test('分岐ブレーカー：フレーム別、二次定格電流を流せるフレームまで', () => {
-  // 三相100kVA 210V：274.9A・Is=274.9/2.8%≒9.8kA
-  const r = C.calculate({ mode: 'three', kva: 100, v1: 6600, v2: 210 });
+  // 三相100kVA 210V：274.9A・Is=274.9/2.8%≒9.8kA（計算値基準）
+  const r = C.calculate({ mode: 'three', kva: 100, v1: 6600, v2: 210, iscBasis: 'calc' });
   const mi = r.branch.makers.mitsubishi.rows.map((x) => x.af + 'AF:' + x.model);
   assert.deepStrictEqual(mi, ['63AF:NF63-SV', '125AF:NF125-CV', '225AF:NF250-CV', '400AF:NF400-CW']);
   const fj = r.branch.makers.fuji.rows.map((x) => x.af + 'AF:' + x.model);
   assert.deepStrictEqual(fj, ['50AF:BW50SAG', '63AF:BW63SAG', '100AF:BW100EAG', '125AF:BW125JAG', '250AF:BW250EAG', '400AF:BW400EAG']);
   // 単相10kVA 210V：47.6A → 63AF / 50AF までで打ち切り
-  const s1 = C.calculate({ mode: 'single', kva: 10, v1: 6600, v2: 210 });
+  const s1 = C.calculate({ mode: 'single', kva: 10, v1: 6600, v2: 210, iscBasis: 'calc' });
   assert.deepStrictEqual(s1.branch.makers.mitsubishi.rows.map((x) => x.af), [63]);
   assert.deepStrictEqual(s1.branch.makers.fuji.rows.map((x) => x.af), [50]);
   // 富士カタログ 4.4（3相210V 500kVA：短絡34.4kA → 125AF は J(50kA)、250AF は E(36kA)、400AF は E(50kA)）
-  const r5 = C.calculate({ mode: 'three', kva: 500, v1: 6600, v2: 210, z: 4 });
+  const r5 = C.calculate({ mode: 'three', kva: 500, v1: 6600, v2: 210, z: 4, iscBasis: 'calc' });
   const f5 = {};
   r5.branch.makers.fuji.rows.forEach((x) => { f5[x.af] = x.model; });
   assert.strictEqual(f5[125], 'BW125JAG');
@@ -356,6 +356,40 @@ test('母線電線は許容電流表（IV・FP 60℃/HIV・EM-IE・EM-LMFC 75℃
   assert.strictEqual(pick(52, '75℃'), '5.5x1');
   assert.strictEqual(pick(1000, '75℃'), '250x2'); // 600A ≥ 600A
   assert.strictEqual(pick(1200, '75℃'), null); // 720A > 702A → 銅バーのみ
+});
+
+test('JIS C 4620 解説表1：キュービクルの遮断容量（既定で優先）', () => {
+  const J = C.data.jisC4620;
+  const row = (m, k, f) => C.jisRow(m, k, 6600, 210, f);
+  assert.deepStrictEqual(row('three', 100, 50).values, [9.0, 11.3, 12.5, 12.7, null]);
+  assert.deepStrictEqual(row('three', 750, 60).values, [16.3, 30.5, 41.7, 42.8, 43.2]);
+  assert.deepStrictEqual(row('single', 500, 50).values, [14.7, 30.4, 47.4, 49.4, 50.1]);
+  assert.deepStrictEqual(row('single', 75, 60).values, [9.7, 13.9, 16.6, 16.9, null]);
+  assert.strictEqual(row('three', 1000, 50), null); // 表外
+  assert.strictEqual(row('single', 750, 50), null);
+  assert.strictEqual(row('three', 20, 50).kva, 30); // 表にない容量は直近上位行
+  assert.strictEqual(C.jisRow('three', 100, 6600, 440, 50), null); // 210V級のみ
+  assert.strictEqual(C.jisRow('scott', 100, 6600, 210, 50), null);
+  assert.strictEqual(C.jisAt(row('three', 100, 50), 63).ka, 11.3); // 63AF → 125A以下列
+  assert.strictEqual(C.jisAt(row('three', 100, 50), 630).ka, 12.7); // — は行の最大値
+  assert.strictEqual(C.jisAt(row('three', 100, 50), 800), null); // 630A超は計算値
+  // 分岐：フレームの最大定格の列の値を必要 Icu に
+  const r = C.calculate({ mode: 'three', kva: 100, v1: 6600, v2: 210, freq: 50 });
+  assert.ok(r.jis);
+  const f = r.branch.makers.mitsubishi.rows;
+  assert.deepStrictEqual(f.map((x) => x.af + ':' + x.needKa), ['63:11.3', '125:11.3', '225:12.5', '400:12.7']);
+  f.forEach((x) => assert.ok(!x.ok || x.icu >= x.needKa));
+  // 主幹：単相100kVA 476.2A → 500A → 630A以下列 18.7kA
+  const m = C.calculate({ mode: 'single', kva: 100, v1: 6600, v2: 210, freq: 50, mainBreaker: true });
+  assert.strictEqual(m.breaker.makers.mitsubishi.pick.needKa, 18.7);
+  // 計算値基準を選ぶと JIS は使わない
+  assert.strictEqual(C.calculate({ mode: 'three', kva: 100, v1: 6600, v2: 210, iscBasis: 'calc' }).jis, null);
+  // 表の昇順
+  ['three', 'single'].forEach((t) => [50, 60].forEach((hz) => {
+    const rows = J[t][hz];
+    assert.ok(rows.every((x, i) => i === 0 || x[0] > rows[i - 1][0]));
+    rows.forEach((x) => { const v = x[1].filter((y) => y !== null); assert.ok(v.every((y, i) => i === 0 || y >= v[i - 1])); });
+  }));
 });
 
 test('データ表は昇順', () => {

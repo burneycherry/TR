@@ -170,32 +170,68 @@
   }
 
   // 表（フレーム昇順・同フレームは下位グレード順）から 定格 ≥ need かつ Icu ≥ 短絡電流 の最初の機種
-  function firstFit(list, need, iscKa, col) {
+  // iscOf(rating)：その定格のブレーカーに必要な Icu [kA]（JIS C 4620 適用時は定格列の値）
+  function firstFit(list, need, iscOf, col) {
     for (let i = 0; list && i < list.length; i++) {
       const b = list[i];
       const r = pickAtLeast(b.ratings, need);
-      if (r !== null && b.icu[col] >= iscKa) { return { model: b.model, af: b.af, rating: r, icu: b.icu[col] }; }
+      if (r !== null && b.icu[col] >= iscOf(r)) { return { model: b.model, af: b.af, rating: r, icu: b.icu[col], needKa: iscOf(r) }; }
     }
     return null;
   }
 
+  // JIS C 4620 解説表1：三相/単相 × 6.6kV × 210V級 × 表の容量のとき行を返す（表にない容量は直近上位行）
+  function jisRow(mode, kva, v1, v2, freq) {
+    const J = D.jisC4620;
+    if (!(mode === 'three' || mode === 'single')) { return null; }
+    if (!(v1 >= 6000 && v1 <= 7200) || !(v2 >= 200 && v2 <= 220)) { return null; }
+    const t = J[mode][Number(freq) === 60 ? 60 : 50];
+    for (let i = 0; i < t.length; i++) {
+      if (kva <= t[i][0]) { return { kva: t[i][0], exact: t[i][0] === kva, values: t[i][1], freq: Number(freq) === 60 ? 60 : 50 }; }
+    }
+    return null;
+  }
+
+  // 定格 rating のブレーカーに対する表の値。630A 超は表外（null）。「—」は変圧器に対し過大な定格 → 行の最大値
+  function jisAt(row, rating) {
+    const R = D.jisC4620.ratings;
+    for (let i = 0; i < R.length; i++) {
+      if (rating <= R[i]) {
+        let v = row.values[i];
+        const dash = v === null;
+        if (dash) { v = Math.max.apply(null, row.values.filter(function (x) { return x !== null; })); }
+        return { ka: v, col: R[i], dash: dash };
+      }
+    }
+    return null;
+  }
+
+  function iscFn(iscKa, jis) {
+    return function (rating) {
+      const j = jis ? jisAt(jis, rating) : null;
+      return j ? j.ka : iscKa;
+    };
+  }
+
   // ブレーカー：配線用遮断器(MCCB) と 気中遮断器(ACB) をそれぞれ選定
-  function selectBreaker(need, iscKa, volt) {
+  function selectBreaker(need, iscKa, volt, jis) {
     const col = volt <= 240 ? 0 : 1;
+    const iscOf = iscFn(iscKa, jis);
     const makers = {};
     Object.keys(D.breaker.makers).forEach(function (k) {
       const m = D.breaker.makers[k];
       makers[k] = {
-        name: m.name, series: m.series, pick: firstFit(m.list, need, iscKa, col),
-        acb: firstFit(m.acb, need, iscKa, col), overNote: m.overNote || '', verified: m.verified
+        name: m.name, series: m.series, pick: firstFit(m.list, need, iscOf, col),
+        acb: firstFit(m.acb, need, iscOf, col), overNote: m.overNote || '', verified: m.verified
       };
     });
-    return { need: need, iscKa: iscKa, voltClass: col === 0 ? 'AC230V級' : 'AC440V級', makers: makers };
+    return { need: need, iscKa: iscKa, jis: jis || null, voltClass: col === 0 ? 'AC230V級' : 'AC440V級', makers: makers };
   }
 
   // 二次側分岐ブレーカー：フレームごとに Icu ≥ 短絡電流 を満たす最下位グレード
   // 表示するフレームは、二次定格電流を流せる最小フレームまで（それより大きいフレームは不要）
-  function selectBranch(i2, iscKa, volt) {
+  // jis：JIS C 4620 解説表1 の行（適用時）。フレームの最大定格の列の値を必要 Icu とする（630A 超は計算値）
+  function selectBranch(i2, iscKa, volt, jis) {
     const col = volt <= 240 ? 0 : 1;
     const makers = {};
     Object.keys(D.breaker.makers).forEach(function (k) {
@@ -213,23 +249,25 @@
       for (let i = 0; i < frames.length; i++) {
         const f = frames[i];
         const max = f.af;
+        const j = jis ? jisAt(jis, max) : null;
+        const need = j ? j.ka : iscKa;
         let hit = null;
         let best = null;
         f.models.forEach(function (b) {
-          if (!hit && b.icu[col] >= iscKa) { hit = b; }
+          if (!hit && b.icu[col] >= need) { hit = b; }
           if (!best || b.icu[col] > best.icu[col]) { best = b; }
         });
         const pickB = hit || best;
         const ratings = pickB.ratings.filter(function (r) { return r <= max; });
         rows.push({
-          af: f.af, model: pickB.model, icu: pickB.icu[col], ok: !!hit,
+          af: f.af, model: pickB.model, icu: pickB.icu[col], ok: !!hit, needKa: need, jisCol: j ? j.col : null, jisDash: j ? j.dash : false,
           minRating: ratings[0], maxRating: ratings[ratings.length - 1]
         });
         if (ratings[ratings.length - 1] >= i2) { break; }
       }
       makers[k] = { name: m.name, series: m.series, rows: rows, verified: m.verified };
     });
-    return { iscKa: iscKa, voltClass: col === 0 ? 'AC230V級' : 'AC440V級', makers: makers };
+    return { iscKa: iscKa, jis: jis || null, voltClass: col === 0 ? 'AC230V級' : 'AC440V級', makers: makers };
   }
 
   // B種接地線(EB)：表2.13.1（一相分容量・電圧級）
@@ -347,7 +385,7 @@
     const z = zIn || (freq === 60 ? row.z60 : row.z50);
     const base = calculate(Object.assign({}, input, { mode: 'three', kva: k, kva1: 0, z: z }));
     base.z.trIsDefault = !zIn;
-    const sub = Object.assign({}, input, { z: z, kva1: 0 });
+    const sub = Object.assign({}, input, { z: z, kva1: 0, iscBasis: 'calc' }); // JIS C 4620 表は通常の三相・単相用
     if (!(split.three > 0) || !(split.single > 0)) {
       throw new Error('三相側・単相側とも 0 より大きい配分にしてください（片側のみの場合は三相・単相を選択）。');
     }
@@ -401,8 +439,10 @@
     }
     const ct = selectCT(i2);
     const thr = selectTHR(i2, ct.primary);
-    const brk = input.mainBreaker ? selectBreaker(i2 * D.breaker.factor, iscKa, v2) : null;
-    const branch = selectBranch(i2, iscKa, v2);
+    // 遮断容量の基準：キュービクルは JIS C 4620 解説表1 を優先（適用できない条件は計算値）
+    const jis = input.iscBasis === 'calc' ? null : jisRow(mode, kva, v1, v2, input.freq);
+    const brk = input.mainBreaker ? selectBreaker(i2 * D.breaker.factor, iscKa, v2, jis) : null;
+    const branch = selectBranch(i2, iscKa, v2, jis);
 
     // 幹線：主幹ブレーカーありは主幹定格（各社の大きい方）以上、なしは二次定格電流以上
     let design = i2;
@@ -420,7 +460,7 @@
       input: { mode: mode, kva: kva, v1: v1, v2: v2, trType: trType, kva1: kva1 },
       hv: hv, circuits: circuits,
       z: { tr: zTr, trIsDefault: !(zInput > 0), src: zSrc, total: zTotal },
-      i1: i1, i2: i2, iscKa: iscKa,
+      i1: i1, i2: i2, iscKa: iscKa, jis: jis,
       fuse: fuse, primaryBreaker: primaryBreaker, ct: ct, thr: thr, breaker: brk, branch: branch,
       conductor: { design: design, byBreaker: !!brk, cable: selectCable(design, D.busCable.tables), busbar: selectBusbar(design) },
       eb: Object.assign(selectEB(mode, kva, v2, ebMax), { maxA: ebMax, maxByMain: !!brk, i2: i2 })
@@ -429,7 +469,7 @@
 
   const api = {
     calculate: calculate, ratedCurrent: ratedCurrent, defaultZ: defaultZ, sourceZ: sourceZ,
-    pickAtLeast: pickAtLeast, todoRow: todoRow, todoSplit: todoSplit, selectCable: selectCable, selectBusbar: selectBusbar,
+    pickAtLeast: pickAtLeast, todoRow: todoRow, jisRow: jisRow, jisAt: jisAt, todoSplit: todoSplit, selectCable: selectCable, selectBusbar: selectBusbar,
     selectBreaker: selectBreaker, selectBranch: selectBranch, selectCT: selectCT, selectTHR: selectTHR, selectFuse: selectFuse,
     selectEB: selectEB, data: D
   };

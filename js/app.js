@@ -106,6 +106,7 @@
       trType: radio('trType') || 'oil',
       mainBreaker: radio('mainBrk') === 'yes',
       freq: radio('freq') === '60' ? 60 : 50,
+      iscBasis: radio('iscBasis') === 'calc' ? 'calc' : 'jis',
       todoMaker: radio('todoMaker') === 'mitsubishi' ? 'mitsubishi' : 'hitachi',
       todoSide: radio('todoSide') === 'single' ? 'single' : 'three',
       todoLoad: el.todoLoad.value === '' ? null : Number(el.todoLoad.value),
@@ -146,7 +147,7 @@
       const m = b.makers[k];
       const p = m.pick;
       const a = m.acb;
-      let val = p ? '<strong>' + esc(p.model) + ' ' + p.rating + 'AT</strong><br>' + note(p.af + 'AF　Icu ' + p.icu + 'kA（' + b.voltClass + '）')
+      let val = p ? '<strong>' + esc(p.model) + ' ' + p.rating + 'AT</strong><br>' + note(p.af + 'AF　Icu ' + p.icu + 'kA' + (p.needKa > 0 ? ' ≥ 必要 ' + fmt(p.needKa, 1) + 'kA' : '') + '（' + b.voltClass + '）')
         : '<strong>MCCB 該当なし</strong><br>' + note(esc(m.overNote || '上位機種・カスケード遮断等を個別検討'));
       // 800A 以上、または MCCB で選べない場合は ACB も示す
       if (a && (!p || b.need >= 800)) {
@@ -157,6 +158,19 @@
         (a && (!p || b.need >= 800) ? ' / ACB ' + a.model + ' ' + a.rating + 'A' : ''));
     });
     return h;
+  }
+
+  // JIS C 4620 解説表1 の行（キュービクルの遮断容量）
+  function jisNote(rc, inp) {
+    const j = rc.jis;
+    if (!j) {
+      return inp.iscBasis === 'jis' && (rc.input.mode === 'three' || rc.input.mode === 'single') ?
+        '<p class="sub-note">JIS C 4620 解説表1 の対象外（6.6kV/210V級・三相30〜750kVA・単相30〜500kVA 以外）のため計算値でブレーカーを選定</p>' : '';
+    }
+    const R = D.jisC4620.ratings;
+    let h = '<p class="sub-note"><strong>' + esc(D.jisC4620.name) + '（' + j.freq + 'Hz・' + j.kva + 'kVA' + (j.exact ? '' : '：直近上位の行') + '）でブレーカーを選定</strong><br>';
+    h += R.map(function (x, i) { return x + 'A以下 ' + (j.values[i] === null ? '—' : fmt(j.values[i], 1) + 'kA'); }).join('／');
+    return h + '<br>JIS C 4304 調査値（短絡電流の最大値）。630A 超は計算値。</p>';
   }
 
   // 結線図（代表例）：三菱 油入変圧器カタログ L-10034-H（仕様 p.9・スコット p.27・ダブルパワー p.23）、日立 灯動共用 製品ページ
@@ -282,7 +296,7 @@
       zNote += rc.z.src > 0 ? '、電源側 %Z = ' + fmt(rc.z.src, 3) + '%（変圧器容量基準）' : '、電源側は無限大母線';
       html += card('二次側 短絡電流' + sx,
         '<div class="kv">' + kvItem('合成 %Z', fmt(rc.z.total, 2), '%') + kvItem('短絡電流 Is', fmt(rc.iscKa, 2), 'kA') + '</div>' +
-        '<p class="sub-note">' + esc(zNote) + '</p>');
+        '<p class="sub-note">' + esc(zNote) + '</p>' + jisNote(rc, inp));
       t.push(tg + '二次短絡電流: ' + fmt(rc.iscKa, 2) + 'kA（%Z ' + fmt(rc.z.total, 2) + '%）');
     });
 
@@ -417,7 +431,8 @@
       const sx = sc[1];
       const tg = sc[2];
       if (rc.breaker) {
-        let bb = '<p class="sub-note" style="margin-top:0">条件: 定格 ≥ ' + fmt(rc.breaker.need, 1) + 'A、' + rc.breaker.voltClass + ' Icu ≥ ' + fmt(rc.iscKa, 2) + 'kA' + (rc.input.mode === 'three' ? '' : '（2P）') + '</p><table class="res">';
+        let bb = '<p class="sub-note" style="margin-top:0">条件: 定格 ≥ ' + fmt(rc.breaker.need, 1) + 'A、' + rc.breaker.voltClass + ' Icu ≥ ' +
+          (rc.jis ? 'JIS C 4620 解説表1 の定格列の値（630A超は ' + fmt(rc.iscKa, 2) + 'kA）' : fmt(rc.iscKa, 2) + 'kA') + (rc.input.mode === 'three' ? '' : '（2P）') + '</p><table class="res">';
         bb += breakerRows(rc.breaker, t, '主幹');
         bb += '</table>';
         html += card('二次側 主幹ブレーカー' + sx, bb, anyUnverified(rc.breaker.makers));
@@ -430,7 +445,8 @@
       const sx = sc[1];
       const tg = sc[2];
       const br = rc.branch;
-      let brb = '<p class="sub-note" style="margin-top:0">条件: ' + br.voltClass + ' Icu ≥ ' + fmt(rc.iscKa, 2) + 'kA' + (rc.input.mode === 'three' ? '' : '（2P）') +
+      let brb = '<p class="sub-note" style="margin-top:0">条件: ' + br.voltClass + ' Icu ≥ ' +
+        (rc.jis ? 'JIS C 4620 解説表1（フレーム最大定格の列）' : fmt(rc.iscKa, 2) + 'kA') + (rc.input.mode === 'three' ? '' : '（2P）') +
         '。二次定格電流 ' + fmt(rc.i2, 1) + 'A を流せるフレームまで表示</p>';
       Object.keys(br.makers).forEach(function (k) {
         const m = br.makers[k];
@@ -438,7 +454,7 @@
         const tx = [];
         m.rows.forEach(function (x) {
           const range = x.minRating === x.maxRating ? x.maxRating + 'A' : x.minRating + '〜' + x.maxRating + 'A';
-          const val = x.ok ? '<strong>' + esc(x.model) + '</strong><br>' + note('Icu ' + x.icu + 'kA　定格 ' + range)
+          const val = x.ok ? '<strong>' + esc(x.model) + '</strong><br>' + note('Icu ' + x.icu + 'kA ≥ 必要 ' + fmt(x.needKa, 1) + 'kA　定格 ' + range)
             : '<strong>該当なし</strong><br>' + note('最大 ' + esc(x.model) + ' Icu ' + x.icu + 'kA で不足（カスケード等を検討）');
           brb += row(x.af + 'AF', val);
           tx.push(x.af + 'AF ' + (x.ok ? x.model : '該当なし'));
@@ -483,7 +499,7 @@
       lastText = '';
     }
     save({
-      uiMode: inp.uiMode, trType: inp.trType, mainBreaker: inp.mainBreaker, freq: inp.freq, todoMaker: inp.todoMaker, todoSide: inp.todoSide, todoLoad: el.todoLoad.value, kva: el.kvaSel.value === MANUAL ? (el.kva.value || MANUAL) : el.kvaSel.value,
+      uiMode: inp.uiMode, trType: inp.trType, mainBreaker: inp.mainBreaker, freq: inp.freq, iscBasis: inp.iscBasis, todoMaker: inp.todoMaker, todoSide: inp.todoSide, todoLoad: el.todoLoad.value, kva: el.kvaSel.value === MANUAL ? (el.kva.value || MANUAL) : el.kvaSel.value,
       v1: el.v1.value === MANUAL ? (el.v1m.value || MANUAL) : el.v1.value,
       v2: el.v2.value === MANUAL ? (el.v2m.value || MANUAL) : el.v2.value,
       z: el.z.value, isc: el.isc.value, kva1: el.kva1.value
@@ -523,6 +539,7 @@
       setRadio('trType', s.trType === 'mold' ? 'mold' : 'oil');
       setRadio('mainBrk', s.mainBreaker ? 'yes' : 'no');
       setRadio('freq', s.freq === 60 ? '60' : '50');
+      setRadio('iscBasis', s.iscBasis === 'calc' ? 'calc' : 'jis');
       setRadio('todoSide', s.todoSide === 'single' ? 'single' : 'three');
       setRadio('todoMaker', s.todoMaker === 'mitsubishi' ? 'mitsubishi' : 'hitachi');
       el.todoLoad.value = s.todoLoad || '';
@@ -553,7 +570,7 @@
         update();
       });
     });
-    Array.prototype.forEach.call(document.querySelectorAll('input[name="trType"], input[name="mainBrk"], input[name="freq"], input[name="todoSide"]'), function (r) {
+    Array.prototype.forEach.call(document.querySelectorAll('input[name="trType"], input[name="mainBrk"], input[name="freq"], input[name="todoSide"], input[name="iscBasis"]'), function (r) {
       r.addEventListener('change', update);
     });
     [el.kva, el.z, el.isc, el.kva1, el.v1m, el.v2m, el.todoLoad].forEach(function (i) { i.addEventListener('input', update); });
@@ -571,7 +588,7 @@
     });
     $('resetBtn').addEventListener('click', function () {
       try { localStorage.removeItem(STORE_KEY); } catch (e) { /* noop */ }
-      setRadio('mode', 'three'); setRadio('trType', 'oil'); setRadio('mainBrk', 'no'); setRadio('freq', '50'); setRadio('todoSide', 'three'); setRadio('todoMaker', 'hitachi'); el.todoLoad.value = '';
+      setRadio('mode', 'three'); setRadio('trType', 'oil'); setRadio('mainBrk', 'no'); setRadio('freq', '50'); setRadio('iscBasis', 'jis'); setRadio('todoSide', 'three'); setRadio('todoMaker', 'hitachi'); el.todoLoad.value = '';
       el.kva.value = ''; el.z.value = ''; el.isc.value = ''; el.kva1.value = '';
       el.v1m.value = ''; el.v2m.value = '';
       buildVolts(null, 210); buildKva(300); update();

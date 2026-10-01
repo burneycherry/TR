@@ -59,13 +59,16 @@
       <input id="kva" class="manual" type="number" inputmode="decimal" min="1" step="any" placeholder="容量を入力" hidden>
     </div>
 
-    <div class="field" id="freqField" hidden>
-      <span class="label">周波数（灯動の %Z に使用）</span>
+    <div class="field">
+      <span class="label">周波数（JIS C 4620 表・灯動の %Z に使用）</span>
       <div class="seg" role="radiogroup">
         <label><input type="radio" name="freq" value="50" checked><span>50Hz</span></label>
         <label><input type="radio" name="freq" value="60"><span>60Hz</span></label>
       </div>
-      <p class="sub-note" id="todoInfo"></p>
+    </div>
+
+    <div class="field" id="freqField" hidden>
+      <p class="sub-note" id="todoInfo" style="margin-top:0"></p>
       <span class="label" style="margin-top:12px">負荷配分（入力する側を選択、もう一方は負荷配分曲線から算出）</span>
       <div class="seg" role="radiogroup">
         <label><input type="radio" name="todoSide" value="three" checked><span>三相側を入力</span></label>
@@ -105,6 +108,14 @@
     </div>
 
     <div class="field">
+      <span class="label">ブレーカーの遮断容量の基準（キュービクルは JIS）</span>
+      <div class="seg" role="radiogroup">
+        <label><input type="radio" name="iscBasis" value="jis" checked><span>JIS C 4620</span></label>
+        <label><input type="radio" name="iscBasis" value="calc"><span>計算値（%Z）</span></label>
+      </div>
+    </div>
+
+    <div class="field">
       <span class="label">二次主幹ブレーカー</span>
       <div class="seg" role="radiogroup">
         <label><input type="radio" name="mainBrk" value="no" checked><span>不要</span></label>
@@ -128,6 +139,7 @@
       <li>ブレーカーは三菱 WS-V（Y-0701 25A版）・富士 G-TWIN（総合カタログ 62D2-J-0030f 2023年1月）・ACB DHシリーズ（62D1-J-0191c）の値から選定しています。主幹が800A以上の場合は ACB も示します。分岐ブレーカーはフレームごとに、変圧器二次直下の短絡電流以上の Icu を持つ最下位グレードを示します。</li>
       <li>容量の候補は日立産機システムの標準容量（JIS）です。単相750/1000kVAはJIS外。候補にない容量は「手入力」を選んでください。</li>
       <li>%Z 未入力時は富士油入形トップランナー変圧器の値（総合カタログ 4.4）を使用します。</li>
+      <li>キュービクル（三相6.6kV/210V・単相6.6kV/210-105V、三相30〜750kVA・単相30〜500kVA）は、ブレーカーの遮断容量を JIS C 4620:2023 解説表1（2018と同値、JIS C 4304 変圧器の短絡電流最大値）の値で選定します（各ブレーカーの定格列、630A超・表外の条件・灯動・スコットは計算値）。「計算値（%Z）」に切り替えることもできます。</li>
       <li>短絡電流は %Z のみ（R/X 分離なし）の簡易計算です。電源側は一次側短絡電流を入力した場合のみ考慮します。</li>
       <li>単相3線式の105V側短絡電流は210V側の値と異なります。</li>
       <li>スコット変圧器の二次側は M座・T座 各 容量/2 の単相回路として計算し、同じ機器を2回路分選定します。</li>
