@@ -165,7 +165,8 @@ test('CT：Y-0550 の定格一次電流（1φ20kVA → 120/5A）', () => {
   assert.strictEqual(r.ct.ratio, '120/5A'); // 95.2A × 1.25 = 119A
   assert.strictEqual(r.ct.model.name, 'CW-15L / CW-15LM');
   assert.strictEqual(C.selectCT(30).ratio, '40/5A');
-  assert.strictEqual(C.selectCT(130).ratio, '180/5A');
+  assert.strictEqual(C.selectCT(130).ratio, '200/5A'); // 160/180/240A は使わない
+  [160, 180, 240].forEach((a) => assert.ok(C.data.ct.primaries.indexOf(a) < 0));
   assert.strictEqual(C.selectCT(700).model.name, 'CW-40LM');
 });
 
