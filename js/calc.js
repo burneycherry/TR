@@ -304,7 +304,7 @@
       i1: i1, i2: i2, iscKa: iscKa,
       fuse: fuse, primaryBreaker: primaryBreaker, ct: ct, thr: thr, breaker: brk, branch: branch,
       conductor: { design: design, byBreaker: !!brk, cable: selectCable(design), busbar: selectBusbar(design) },
-      eb: hv ? selectEB(mode, kva, v2, design) : null
+      eb: selectEB(mode, kva, v2, design)
     };
   }
 

@@ -284,8 +284,6 @@
         '<p class="sub-note">B種接地工事の接地線の太さ（' + e.voltClass + '・銅線）。一相分容量：三相=定格÷3、単相=定格、スコット=定格÷2。単相3線式は200V級を適用。<br>' + esc(D.eb.note) + '</p>';
       html += card('EB（B種接地線）サイズ', eb, e.verified === false);
       t.push('EB: ' + (e.label || '個別検討') + (e.byT2 ? '（表2.13.2による）' : ''));
-    } else {
-      html += card('EB（B種接地線）サイズ', '<p class="sub-note" style="margin:0">低圧/低圧変圧器のため B種接地工事は対象外です（混触防止・二次側接地は別途検討）。</p>');
     }
 
     el.results.innerHTML = html;

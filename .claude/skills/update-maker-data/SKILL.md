@@ -1,20 +1,32 @@
 ---
 name: update-maker-data
-description: js/data.js のメーカー選定テーブル（限流ヒューズ・THR・ブレーカーIcu・電線/銅バー許容電流）をカタログ値で更新する手順。ユーザーがカタログ値・型番・定格を提示して表の修正を求めたときに使う。
+description: js/data.js の選定テーブル（LBSヒューズ・MCCB/ACB の定格と遮断容量・THR・CT・EB・電線/銅バー・標準容量・%Z）をカタログや規準の値で更新する手順。ユーザーがカタログ PDF・画像・型番・定格を提示して表の修正を求めたときに使う。
 ---
 
-# メーカー選定データの更新
+# 選定データの更新
 
-1. ユーザーが提示した値（カタログ名・版数）を確認する。推測値で上書きしない。
+1. 出典（カタログ名・版数・ページ）を確認する。推測値で上書きしない。
+   - PDF が `pdftotext` で読めない日本語表は `pip install pymupdf` → `page.get_pixmap(dpi=150, clip=...)` で画像化して目視。
 2. `js/data.js` の該当テーブルを編集する。
-   - 三菱ヒューズ：`lbs.makers.mitsubishi.single/three[電圧]` = `[kVA, [G,T]最小, [G,T]最大]`（'※'=CLS M400A, null=—）、`combined` = `[Im以下, [G,T]]`。
-   - 富士ヒューズ：`lbs.makers.fuji.oil/mold[電圧]` の `rows`(三相kVA)×`cols`(単相kVA) と `g` 行列（行列サイズはテストで検証）。
-   - 画像から転記した場合は、転記後にテストへ代表値を数件追加して照合する。
-   - THR：`thr` = `{name, model, step}`（富士 TU-0、整定は step 単位で切り捨て）。
-   - ブレーカー：`breaker.makers.<maker>.list` は **小フレーム→下位グレードの順**。`icu: [230V級, 440V級]`。
-   - EB：`eb.table` = `[100V級, 200V級, 400V級 の一相分kVA以下, mm²]`。
-   - 電線：`cable.tables[]` = `{group, temp, name, basis, limits[], sizes[]}`（limits A以下 → sizes sq以上、両方昇順・同数）。銅バー：`busbar.table` = `[表示名, A]` 許容電流の昇順。
-3. 確認済みのテーブルは `verified: true`、`version` を当日の日付に。
-4. `npm run check && npm test` を実行し全て pass させる。
-5. `sw.js` の `CACHE` 名を上げる（例 `tr-select-v2`）。
-6. コミットメッセージに出典（カタログ名・版）を書く。
+
+| テーブル | 形式 |
+|---|---|
+| `capacities.single/three/scott` | 標準容量 kVA（昇順） |
+| `defaultZ.single/three/three400` | `[kVA以上, %Z]` |
+| `lbs.makers.mitsubishi.single/three[3300|6600]` | `[kVA, [G,T]最小, [G,T]最大]`（`'※'`=CLS M400A、`null`=—） |
+| `lbs.makers.mitsubishi.combined` | `[Im 以下, [G,T]]`（表5(2)） |
+| `lbs.makers.fuji.oil/mold[3300|6600]` | `rows`(三相kVA, 0=なし) × `cols`(単相kVA, 0=なし) の `g` 行列 |
+| `breaker.makers.<maker>.list` | MCCB。**フレーム昇順→同フレームは下位グレード順**。`{model, af, ratings[], icu:[230V級,440V級], branchAf?}` |
+| `breaker.makers.<maker>.acb` | ACB。同上の並び。富士 DH は icu=[JEC220V, JIS440V] |
+| `ct` | `factor`, `primaries[]`（/5A） |
+| `thr` | `{name, model, step}`（富士 TU-0、整定は step 単位で切り捨て） |
+| `eb.table` | `[100V級, 200V級, 400V級 の一相分kVA以下, mm²]`（表2.13.1） |
+| `eb.table2` | `[遮断器定格A以下, 表示, 比較用mm²]`（表2.13.2） |
+| `cable.tables[]` | `{group, temp, name, basis, limits[], sizes[]}`（A以下→sq、昇順・同数、最小5.5sq）、`maxParallel:2`、`parallelRatio:0.6` |
+| `busbar.table` | `[表示名, 許容A]`（許容電流の昇順） |
+
+3. 確認済みテーブルは `verified: true`、`version` を当日の日付（同日複数回は末尾に英字）に。
+4. 転記した代表値を `tests/calc.test.js` に追加して照合する。
+5. `npm run check && npm test` を全て pass させる。
+6. `sw.js` の `CACHE` 名を上げる（例 `tr-select-v11` → `v12`）。
+7. CLAUDE.md / README.md の出典表を更新し、コミットメッセージに出典（カタログ名・版）を書く。

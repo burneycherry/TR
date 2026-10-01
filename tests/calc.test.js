@@ -100,10 +100,11 @@ test('スコット 高圧/低圧：2回路・各 kVA/2', () => {
   assert.strictEqual(r.eb.phaseKva, 50);
 });
 
-test('スコット 低圧/低圧：一次側ブレーカー、LBS・EBなし', () => {
+test('スコット 低圧/低圧：一次側ブレーカー、LBSなし、EBは表示', () => {
   const r = C.calculate({ mode: 'scott', kva: 50, v1: 440, v2: 210, iscKa: 10 });
   assert.strictEqual(r.fuse, null);
-  assert.strictEqual(r.eb, null);
+  assert.strictEqual(r.eb.phaseKva, 25); // スコット＝定格÷2
+  assert.strictEqual(r.eb.label, '14mm²'); // 200V級 25kVA→表2.13.1 14mm²（表2.13.2 119A→8mm²）
   near(r.i1, 50000 / (Math.sqrt(3) * 440), 1e-9);
   Object.values(r.primaryBreaker.makers).forEach((m) => {
     assert.ok(m.pick.rating >= r.i1 * C.data.breaker.primaryFactor);
