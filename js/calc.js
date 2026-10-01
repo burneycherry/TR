@@ -233,7 +233,7 @@
 
   // B種接地線(EB)
   // breakerA：変圧器低圧側を保護する配線用遮断器等の定格（表2.13.2 照合用）。0/未指定は表2.13.1 のみ
-  // 一次が高圧の変圧器は表2.13.1 のみで決める（遮断器定格から求めない。ユーザー確認済み）
+  // 備考(2)の「変圧器の低圧側を保護する配線用遮断器等」＝二次主幹ブレーカー。主幹なしは表2.13.1 のみ（ユーザー確認済み）
   function selectEB(mode, kva, v2, breakerA) {
     const phaseKva = mode === 'three' ? kva / 3 : (mode === 'scott' ? kva / 2 : kva);
     const col = v2 <= 150 ? 0 : (v2 <= 300 ? 1 : 2);
@@ -310,7 +310,7 @@
       i1: i1, i2: i2, iscKa: iscKa,
       fuse: fuse, primaryBreaker: primaryBreaker, ct: ct, thr: thr, breaker: brk, branch: branch,
       conductor: { design: design, byBreaker: !!brk, cable: selectCable(design, D.busCable.tables), busbar: selectBusbar(design) },
-      eb: Object.assign(selectEB(mode, kva, v2, hv ? 0 : design), { hv: hv })
+      eb: selectEB(mode, kva, v2, brk ? design : 0)
     };
   }
 
