@@ -110,6 +110,7 @@
       uiMode: m,
       mode: calcMode(m),
       trType: radio('trType') || 'oil',
+      mainBreaker: radio('mainBrk') === 'yes',
       kva: Number(el.kva.value),
       v1: voltValue(el.v1, el.v1m),
       v2: voltValue(el.v2, el.v2m),
@@ -234,15 +235,37 @@
       t.push('THR: ' + th.name + ' ' + th.model + ' 整定 ' + fmt(th.setting, 1) + 'A（CT ' + th.ct + '）');
     }
 
-    // 主幹ブレーカー
-    let bb = '<p class="sub-note" style="margin-top:0">条件: 定格 ≥ ' + fmt(r.breaker.need, 1) + 'A、' + r.breaker.voltClass + ' Icu ≥ ' + fmt(r.iscKa, 2) + 'kA' + (r.input.mode === 'three' ? '' : '（2P）') + '</p><table class="res">';
-    bb += breakerRows(r.breaker, t, '主幹');
-    bb += '</table>';
-    html += card('二次側 主幹ブレーカー' + per, bb, anyUnverified(r.breaker.makers));
+    // 主幹ブレーカー（必要時のみ）
+    if (r.breaker) {
+      let bb = '<p class="sub-note" style="margin-top:0">条件: 定格 ≥ ' + fmt(r.breaker.need, 1) + 'A、' + r.breaker.voltClass + ' Icu ≥ ' + fmt(r.iscKa, 2) + 'kA' + (r.input.mode === 'three' ? '' : '（2P）') + '</p><table class="res">';
+      bb += breakerRows(r.breaker, t, '主幹');
+      bb += '</table>';
+      html += card('二次側 主幹ブレーカー' + per, bb, anyUnverified(r.breaker.makers));
+    }
+
+    // 分岐ブレーカー（フレーム別）
+    const br = r.branch;
+    let brb = '<p class="sub-note" style="margin-top:0">条件: ' + br.voltClass + ' Icu ≥ ' + fmt(r.iscKa, 2) + 'kA' + (r.input.mode === 'three' ? '' : '（2P）') +
+      '。二次定格電流 ' + fmt(r.i2, 1) + 'A を流せるフレームまで表示</p>';
+    Object.keys(br.makers).forEach(function (k) {
+      const m = br.makers[k];
+      brb += '<h3 class="sub-h">' + esc(m.name) + '　<small>' + esc(m.series) + '</small></h3><table class="res">';
+      const tx = [];
+      m.rows.forEach(function (x) {
+        const range = x.minRating === x.maxRating ? x.maxRating + 'A' : x.minRating + '〜' + x.maxRating + 'A';
+        const val = x.ok ? '<strong>' + esc(x.model) + '</strong><br>' + note('Icu ' + x.icu + 'kA　定格 ' + range)
+          : '<strong>該当なし</strong><br>' + note('最大 ' + esc(x.model) + ' Icu ' + x.icu + 'kA で不足（カスケード等を検討）');
+        brb += row(x.af + 'AF', val);
+        tx.push(x.af + 'AF ' + (x.ok ? x.model : '該当なし'));
+      });
+      brb += '</table>';
+      t.push('分岐(' + m.name + '): ' + tx.join(' / '));
+    });
+    html += card('二次側 分岐ブレーカー（フレーム別）' + per, brb, anyUnverified(br.makers));
 
     // 電線・銅バー
     const cd = r.conductor;
-    let cb = '<p class="sub-note" style="margin-top:0">設計電流 ' + fmt(cd.design, 0) + 'A（主幹ブレーカー定格以上）</p><table class="res">';
+    let cb = '<p class="sub-note" style="margin-top:0">設計電流 ' + fmt(cd.design, cd.byBreaker ? 0 : 1) + 'A（' + (cd.byBreaker ? '主幹ブレーカー定格以上' : '二次定格電流') + '）</p><table class="res">';
     const cabTxts = [];
     cd.cable.forEach(function (c) {
       const txt = c.sq ? c.sq + 'sq' + (c.parallel > 1 ? ' × ' + c.parallel + '条' : '') : '該当なし（銅バー推奨）';
@@ -279,7 +302,7 @@
     const inp = readInput();
     el.kva1Field.hidden = !(inp.mode === 'three' && inp.v1 > 600);
     if (el.kva1Field.hidden) { inp.kva1 = null; }
-    el.z.placeholder = '標準 ' + C.defaultZ(inp.mode, inp.kva || 0) + '%';
+    el.z.placeholder = '標準 ' + C.defaultZ(inp.mode, inp.kva || 0, inp.v2) + '%';
     try {
       const r = C.calculate(inp);
       el.err.textContent = '';
@@ -290,7 +313,7 @@
       lastText = '';
     }
     save({
-      uiMode: inp.uiMode, trType: inp.trType, kva: el.kva.value,
+      uiMode: inp.uiMode, trType: inp.trType, mainBreaker: inp.mainBreaker, kva: el.kva.value,
       v1: el.v1.value === MANUAL ? (el.v1m.value || MANUAL) : el.v1.value,
       v2: el.v2.value === MANUAL ? (el.v2m.value || MANUAL) : el.v2.value,
       z: el.z.value, isc: el.isc.value, kva1: el.kva1.value
@@ -328,6 +351,7 @@
     if (s) {
       setRadio('mode', V1_OPTIONS[s.uiMode] ? s.uiMode : 'three');
       setRadio('trType', s.trType === 'mold' ? 'mold' : 'oil');
+      setRadio('mainBrk', s.mainBreaker ? 'yes' : 'no');
       if (s.kva) { el.kva.value = s.kva; }
       el.z.value = s.z || '';
       el.isc.value = s.isc || '';
@@ -339,7 +363,7 @@
     Array.prototype.forEach.call(document.querySelectorAll('input[name="mode"]'), function (r) {
       r.addEventListener('change', function () { buildVolts(null, voltValue(el.v2, el.v2m)); buildChips(); update(); });
     });
-    Array.prototype.forEach.call(document.querySelectorAll('input[name="trType"]'), function (r) {
+    Array.prototype.forEach.call(document.querySelectorAll('input[name="trType"], input[name="mainBrk"]'), function (r) {
       r.addEventListener('change', update);
     });
     [el.kva, el.z, el.isc, el.kva1, el.v1m, el.v2m].forEach(function (i) { i.addEventListener('input', update); });
@@ -357,7 +381,7 @@
     });
     $('resetBtn').addEventListener('click', function () {
       try { localStorage.removeItem(STORE_KEY); } catch (e) { /* noop */ }
-      setRadio('mode', 'three'); setRadio('trType', 'oil');
+      setRadio('mode', 'three'); setRadio('trType', 'oil'); setRadio('mainBrk', 'no');
       el.kva.value = '300'; el.z.value = ''; el.isc.value = ''; el.kva1.value = '';
       el.v1m.value = ''; el.v2m.value = '';
       buildVolts(null, 210); buildChips(); update();

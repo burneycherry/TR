@@ -25,8 +25,11 @@ test('%Z 入力時の短絡電流（無限大母線）', () => {
 
 test('%Z 未入力は標準値を使用', () => {
   const r = C.calculate({ phase: 3, kva: 300, v1: 6600, v2: 210 });
-  assert.strictEqual(r.z.tr, 3.0);
+  assert.strictEqual(r.z.tr, 2.9); // 富士トップランナー 300kVA
   assert.strictEqual(r.z.trIsDefault, true);
+  assert.strictEqual(C.defaultZ('three', 2000, 210), 5.8);
+  assert.strictEqual(C.defaultZ('three', 2000, 420), 4.2);
+  assert.strictEqual(C.defaultZ('single', 75, 210), 1.8);
 });
 
 test('電源側インピーダンスで短絡電流が減る', () => {
@@ -36,9 +39,9 @@ test('電源側インピーダンスで短絡電流が減る', () => {
   near(b.z.src, 1000 / (Math.sqrt(3) * 6600 * 12.5) * 100, 1e-9);
 });
 
-test('LBSヒューズ：300kVA超で警告、22kVで表外', () => {
+test('LBSヒューズ：容量による警告なし、22kVで表外', () => {
   assert.strictEqual(C.calculate({ phase: 3, kva: 300, v1: 6600, v2: 210 }).fuse.warn.length, 0);
-  assert.ok(C.calculate({ phase: 3, kva: 500, v1: 6600, v2: 210 }).fuse.warn.length > 0);
+  assert.strictEqual(C.calculate({ phase: 3, kva: 1000, v1: 6600, v2: 210 }).fuse.warn.length, 0);
   const r = C.calculate({ phase: 3, kva: 100, v1: 22000, v2: 210 });
   assert.strictEqual(r.fuse.mitsubishi.ok, false);
   assert.strictEqual(r.fuse.fuji.ok, false);
@@ -137,7 +140,7 @@ test('THR 例：単相100kVA 210V → CT 600/5A、TU-0 3.9A', () => {
 
 test('ブレーカーは定格・遮断容量を満たす', () => {
   for (const kva of [20, 50, 100, 300, 500, 1000, 1500]) {
-    const r = C.calculate({ phase: 3, kva: kva, v1: 6600, v2: 210 });
+    const r = C.calculate({ phase: 3, kva: kva, v1: 6600, v2: 210, mainBreaker: true });
     Object.values(r.breaker.makers).forEach((m) => {
       if (!m.pick) { return; }
       assert.ok(m.pick.rating >= r.i2, kva + 'kVA rating');
@@ -161,7 +164,7 @@ test('THR 整定値は常に換算値以下（切り捨て）', () => {
 
 test('主幹ブレーカー：カタログ転記値で選定', () => {
   const pick = (o) => {
-    const r = C.calculate(Object.assign({ v1: 6600 }, o)).breaker.makers;
+    const r = C.calculate(Object.assign({ v1: 6600, mainBreaker: true }, o)).breaker.makers;
     return [r.mitsubishi.pick && r.mitsubishi.pick.model + ' ' + r.mitsubishi.pick.rating,
       r.fuji.pick && r.fuji.pick.model + ' ' + r.fuji.pick.rating];
   };
@@ -185,8 +188,44 @@ test('ブレーカー表はフレーム昇順', () => {
   });
 });
 
+test('主幹ブレーカーは既定で不要、幹線は二次定格電流基準', () => {
+  const r = C.calculate({ mode: 'three', kva: 100, v1: 6600, v2: 210 });
+  assert.strictEqual(r.breaker, null);
+  assert.strictEqual(r.conductor.byBreaker, false);
+  near(r.conductor.design, r.i2, 1e-9);
+});
+
+test('分岐ブレーカー：フレーム別、二次定格電流を流せるフレームまで', () => {
+  // 三相100kVA 210V：274.9A・Is=274.9/2.8%≒9.8kA
+  const r = C.calculate({ mode: 'three', kva: 100, v1: 6600, v2: 210 });
+  const mi = r.branch.makers.mitsubishi.rows.map((x) => x.af + 'AF:' + x.model);
+  assert.deepStrictEqual(mi, ['63AF:NF63-SV', '125AF:NF125-CV', '225AF:NF250-CV', '400AF:NF400-CW']);
+  const fj = r.branch.makers.fuji.rows.map((x) => x.af + 'AF:' + x.model);
+  assert.deepStrictEqual(fj, ['50AF:BW50SAG', '63AF:BW63SAG', '100AF:BW100EAG', '125AF:BW125JAG', '250AF:BW250EAG', '400AF:BW400EAG']);
+  // 単相10kVA 210V：47.6A → 63AF / 50AF までで打ち切り
+  const s1 = C.calculate({ mode: 'single', kva: 10, v1: 6600, v2: 210 });
+  assert.deepStrictEqual(s1.branch.makers.mitsubishi.rows.map((x) => x.af), [63]);
+  assert.deepStrictEqual(s1.branch.makers.fuji.rows.map((x) => x.af), [50]);
+  // 富士カタログ 4.4（3相210V 500kVA：短絡34.4kA → 125AF は J(50kA)、250AF は E(36kA)、400AF は E(50kA)）
+  const r5 = C.calculate({ mode: 'three', kva: 500, v1: 6600, v2: 210, z: 4 });
+  const f5 = {};
+  r5.branch.makers.fuji.rows.forEach((x) => { f5[x.af] = x.model; });
+  assert.strictEqual(f5[125], 'BW125JAG');
+  assert.strictEqual(f5[250], 'BW250EAG'); // 36kA ≥ 34.4kA
+  assert.strictEqual(f5[400], 'BW400EAG');
+  assert.strictEqual(f5[50], 'BW50HAG');
+  // 63AF は NF63-HRV(85kA)、富士 63AF/100AF は Icu 不足で該当なし
+  assert.strictEqual(r5.branch.makers.mitsubishi.rows[0].model, 'NF63-HRV');
+  const f63 = r5.branch.makers.fuji.rows.find((x) => x.af === 63);
+  assert.strictEqual(f63.ok, false);
+  // 全行 Icu ≥ Is
+  [r, s1].forEach((x) => Object.values(x.branch.makers).forEach((m) => m.rows.forEach((row) => {
+    assert.ok(row.ok && row.icu >= x.iscKa, row.model);
+  })));
+});
+
 test('電線・銅バーは設計電流以上', () => {
-  const r = C.calculate({ phase: 3, kva: 750, v1: 6600, v2: 210 });
+  const r = C.calculate({ phase: 3, kva: 750, v1: 6600, v2: 210, mainBreaker: true });
   r.conductor.cable.forEach((c) => assert.ok(c.limit * c.parallel >= r.conductor.design, c.name));
   assert.ok(r.conductor.busbar.ampacity >= r.conductor.design);
 });

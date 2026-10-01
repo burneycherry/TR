@@ -120,6 +120,8 @@ table.res td strong { font-size: 16px; }
 table.res tr:last-child th, table.res tr:last-child td { border-bottom: none; }
 
 .sub-note { font-size: 12px; color: #5b6878; margin: 8px 0 0; }
+.sub-h { font-size: 14px; margin: 12px 0 2px; color: #1b2430; }
+.sub-h small { font-size: 11px; font-weight: 400; color: #5b6878; }
 .warn { background: #fff4e5; color: #8a4b00; border-radius: 8px; padding: 8px 10px; font-size: 13px; margin-top: 8px; }
 
 .badge {
@@ -186,6 +188,8 @@ table.res tr:last-child th, table.res tr:last-child td { border-bottom: none; }
   .kv .v { color: #e4e9ef; }
   table.res th, table.res td { border-bottom-color: #2a3542; }
   .warn { background: #3a2a10; color: #f5c77e; }
+  .sub-h { color: #e4e9ef; }
+  .sub-h small { color: #98a6b5; }
   .badge { background: #4a1d1d; color: #ffb4ab; }
   .actions button { background: #2c6aa8; }
   .actions button.sub { background: #2a3542; color: #e4e9ef; }

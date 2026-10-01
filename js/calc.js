@@ -22,8 +22,9 @@
     return input.phase === 1 ? 'single' : 'three';
   }
 
-  function defaultZ(mode, kva) {
-    const t = D.defaultZ[mode === 'single' || mode === 1 ? 'single' : 'three'];
+  function defaultZ(mode, kva, v2) {
+    const single = mode === 'single' || mode === 1;
+    const t = D.defaultZ[single ? 'single' : (v2 > 300 ? 'three400' : 'three')];
     let z = t[0][1];
     for (let i = 0; i < t.length; i++) {
       if (kva >= t[i][0]) { z = t[i][1]; }
@@ -104,10 +105,6 @@
     const vc = fuseVoltClass(v1);
     const warn = [];
     if (!vc) { warn.push('一次電圧 ' + v1 + 'V はヒューズ選定表（3.3kV/6.6kV）の対象外です。'); }
-    const total = kva + (mode === 'three' && kva1 > 0 ? kva1 : 0);
-    if (total > L.maxKva) {
-      warn.push('LBS(PF付)で開閉する変圧器は ' + L.maxKva + 'kVA 以下が目安です（高圧受電設備規程）。VCB+OCR 等を検討してください。');
-    }
     if (mode === 'scott') { warn.push('スコット変圧器は三相容量として三相の表で選定しています。'); }
     const i3 = mode === 'single' ? 0 : ratedCurrent(3, kva, v1);
     const i1s = mode === 'single' ? ratedCurrent(1, kva, v1) : (kva1 > 0 ? ratedCurrent(1, kva1, v1) : 0);
@@ -181,6 +178,45 @@
     return { need: need, iscKa: iscKa, voltClass: col === 0 ? 'AC230V級' : 'AC440V級', makers: makers };
   }
 
+  // 二次側分岐ブレーカー：フレームごとに Icu ≥ 短絡電流 を満たす最下位グレード
+  // 表示するフレームは、二次定格電流を流せる最小フレームまで（それより大きいフレームは不要）
+  function selectBranch(i2, iscKa, volt) {
+    const col = volt <= 240 ? 0 : 1;
+    const makers = {};
+    Object.keys(D.breaker.makers).forEach(function (k) {
+      const m = D.breaker.makers[k];
+      const frames = [];
+      m.list.forEach(function (b) {
+        const af = b.branchAf || b.af;
+        if (af > D.breaker.branchMaxAf) { return; }
+        let f = frames.find(function (x) { return x.af === af; });
+        if (!f) { f = { af: af, models: [] }; frames.push(f); }
+        f.models.push(b);
+      });
+      frames.sort(function (a, b) { return a.af - b.af; });
+      const rows = [];
+      for (let i = 0; i < frames.length; i++) {
+        const f = frames[i];
+        const max = f.af;
+        let hit = null;
+        let best = null;
+        f.models.forEach(function (b) {
+          if (!hit && b.icu[col] >= iscKa) { hit = b; }
+          if (!best || b.icu[col] > best.icu[col]) { best = b; }
+        });
+        const pickB = hit || best;
+        const ratings = pickB.ratings.filter(function (r) { return r <= max; });
+        rows.push({
+          af: f.af, model: pickB.model, icu: pickB.icu[col], ok: !!hit,
+          minRating: ratings[0], maxRating: ratings[ratings.length - 1]
+        });
+        if (ratings[ratings.length - 1] >= i2) { break; }
+      }
+      makers[k] = { name: m.name, series: m.series, rows: rows, verified: m.verified };
+    });
+    return { iscKa: iscKa, voltClass: col === 0 ? 'AC230V級' : 'AC440V級', makers: makers };
+  }
+
   // B種接地線(EB)
   function selectEB(mode, kva, v2) {
     const phaseKva = mode === 'three' ? kva / 3 : (mode === 'scott' ? kva / 2 : kva);
@@ -196,7 +232,8 @@
 
   /*
    * input: { mode: 'single'|'three'|'scott'（旧: phase 1|3）, kva, v1, v2,
-   *          z, iscKa, trType: 'oil'|'mold', kva1（三相と一括でLBSを共用する単相kVA） }
+   *          z, iscKa, trType: 'oil'|'mold', kva1（三相と一括でLBSを共用する単相kVA）,
+   *          mainBreaker: true で二次主幹ブレーカーも選定（既定は不要） }
    */
   function calculate(input) {
     const mode = normMode(input);
@@ -210,7 +247,7 @@
     const kva1 = mode === 'three' && Number(input.kva1) > 0 ? Number(input.kva1) : 0;
     const hv = v1 > LV_MAX;
     const zInput = Number(input.z);
-    const zTr = zInput > 0 ? zInput : defaultZ(mode, kva);
+    const zTr = zInput > 0 ? zInput : defaultZ(mode, kva, v2);
     const iscIn = Number(input.iscKa) > 0 ? Number(input.iscKa) : 0;
     const zSrc = sourceZ(mode, kva, v1, iscIn);
     const zTotal = zTr + zSrc;
@@ -229,22 +266,25 @@
     }
     const ct = selectCT(i2);
     const thr = selectTHR(i2, ct.primary);
-    const brk = selectBreaker(i2 * D.breaker.factor, iscKa, v2);
+    const brk = input.mainBreaker ? selectBreaker(i2 * D.breaker.factor, iscKa, v2) : null;
+    const branch = selectBranch(i2, iscKa, v2);
 
-    // 幹線は主幹ブレーカー定格以上で選ぶ（各社の大きい方）
+    // 幹線：主幹ブレーカーありは主幹定格（各社の大きい方）以上、なしは二次定格電流以上
     let design = i2;
-    Object.keys(brk.makers).forEach(function (k) {
-      const p = brk.makers[k].pick;
-      if (p && p.rating > design) { design = p.rating; }
-    });
+    if (brk) {
+      Object.keys(brk.makers).forEach(function (k) {
+        const p = brk.makers[k].pick;
+        if (p && p.rating > design) { design = p.rating; }
+      });
+    }
 
     return {
       input: { mode: mode, kva: kva, v1: v1, v2: v2, trType: trType, kva1: kva1 },
       hv: hv, circuits: circuits,
       z: { tr: zTr, trIsDefault: !(zInput > 0), src: zSrc, total: zTotal },
       i1: i1, i2: i2, iscKa: iscKa,
-      fuse: fuse, primaryBreaker: primaryBreaker, ct: ct, thr: thr, breaker: brk,
-      conductor: { design: design, cable: selectCable(design), busbar: selectBusbar(design) },
+      fuse: fuse, primaryBreaker: primaryBreaker, ct: ct, thr: thr, breaker: brk, branch: branch,
+      conductor: { design: design, byBreaker: !!brk, cable: selectCable(design), busbar: selectBusbar(design) },
       eb: hv ? selectEB(mode, kva, v2) : null
     };
   }
@@ -252,7 +292,7 @@
   const api = {
     calculate: calculate, ratedCurrent: ratedCurrent, defaultZ: defaultZ, sourceZ: sourceZ,
     pickAtLeast: pickAtLeast, selectCable: selectCable, selectBusbar: selectBusbar,
-    selectBreaker: selectBreaker, selectCT: selectCT, selectTHR: selectTHR, selectFuse: selectFuse,
+    selectBreaker: selectBreaker, selectBranch: selectBranch, selectCT: selectCT, selectTHR: selectTHR, selectFuse: selectFuse,
     selectEB: selectEB, data: D
   };
   root.TRCalc = api;
