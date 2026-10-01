@@ -280,26 +280,32 @@
    * input: { mode: 'single'|'three'|'scott'（旧: phase 1|3）, kva, v1, v2,
    *          z, iscKa, trType: 'oil'|'mold', kva1（三相と一括でLBSを共用する単相kVA）,
    *          mainBreaker: true で二次主幹ブレーカーも選定（既定は不要） }
-   * mode 'todo'（灯動共用変圧器）：kva=定格容量（日立 70〜150kVA）、freq=50|60（%Z 選択）。'three4w' は 'three' と同じ計算（二次は線間電圧）
+   * mode 'todo'（灯動共用変圧器）：todoMaker='hitachi'|'mitsubishi'、kva=定格容量、freq=50|60（%Z）、todoSide/todoLoad（負荷配分）。'three4w' は 'three' と同じ計算（二次は線間電圧）
    */
-  // 灯動共用変圧器（日立 区分①〜⑤）：定格容量の行を返す
-  function todoRow(kva) {
-    const rows = D.todo.rows;
-    for (let i = 0; i < rows.length; i++) {
-      if (rows[i][0] === kva) { return { kva: rows[i][0], single: rows[i][1], z50: rows[i][2], z60: rows[i][3] }; }
+  function todoMaker(maker) { return D.todo.makers[maker] ? maker : 'hitachi'; }
+
+  // 灯動共用変圧器：メーカー・定格容量の行を返す
+  function todoRow(maker, kva) {
+    const M = D.todo.makers[todoMaker(maker)];
+    for (let i = 0; i < M.rows.length; i++) {
+      const r = M.rows[i];
+      if (r[0] === kva) {
+        return { kva: r[0], single: r[1], z50: r[2], z60: r[3], zRange: M.zRange ? M.zRange[kva] : null, knee: M.knees[kva] };
+      }
     }
     return null;
   }
 
   // 負荷配分曲線：side='three' なら三相kVA→単相kVA、'single' なら単相kVA→三相kVA（折れ線を線形補間）
-  function todoSplit(kva, side, value) {
-    const c = D.todo.curves[kva];
+  function todoSplit(maker, kva, side, value) {
+    const M = D.todo.makers[todoMaker(maker)];
+    const c = M.curves[kva];
     if (!c) { return null; }
-    const knee = c[1];
+    const knee = M.knees[kva];
     const xi = side === 'single' ? 1 : 0;
     const yi = 1 - xi;
     const max = side === 'single' ? c[0][1] : c[c.length - 1][0];
-    // 未入力は折れ点（バランス点）
+    // 未入力は折れ点（三相・単相を同時にとる場合の値）
     let v = value === null || value === undefined || value === '' ? knee[xi] : Number(value);
     if (!(v >= 0)) { v = knee[xi]; }
     if (v > max) { return { error: (side === 'single' ? '単相' : '三相') + '側は最大 ' + max + 'kVA です。' }; }
@@ -315,6 +321,7 @@
         r.single = Math.round(r.single * 10) / 10;
         r.side = side;
         r.knee = knee;
+        r.overSingle = M.singleLimit > 0 && r.single > M.singleLimit ? M.singleLimit : 0;
         return r;
       }
     }
@@ -326,13 +333,15 @@
   // %Z は日立特性表（周波数別）。EB の一相分容量＝単相＋三相÷3
   function calculateTodo(input) {
     const k = Number(input.kva);
-    const row = todoRow(k);
+    const maker = todoMaker(input.todoMaker);
+    const M = D.todo.makers[maker];
+    const row = todoRow(maker, k);
     if (!row) {
-      throw new Error('灯動変圧器は定格容量 ' + D.todo.rows.map(function (x) { return x[0]; }).join('/') + 'kVA から選んでください。');
+      throw new Error('灯動変圧器（' + M.name + '）は定格容量 ' + M.rows.map(function (x) { return x[0]; }).join('/') + 'kVA から選んでください。');
     }
     const freq = Number(input.freq) === 60 ? 60 : 50;
     // 負荷配分：三相側／単相側のどちらかを入力し、もう一方を負荷配分曲線から求める
-    const split = todoSplit(k, input.todoSide === 'single' ? 'single' : 'three', input.todoLoad);
+    const split = todoSplit(maker, k, input.todoSide === 'single' ? 'single' : 'three', input.todoLoad);
     if (!split || split.error) { throw new Error(split ? split.error : '負荷配分曲線がありません。'); }
     const zIn = Number(input.z) > 0 ? Number(input.z) : 0;
     const z = zIn || (freq === 60 ? row.z60 : row.z50);
@@ -352,7 +361,10 @@
     if (base.fuse) { base.fuse.warn.push('灯動共用変圧器：一次側は定格容量 ' + k + 'kVA の三相変圧器として選定しています。'); }
     return Object.assign(base, {
       input: Object.assign({}, base.input, { mode: 'todo', kva3: split.three, kva1: split.single, freq: freq }),
-      todo: { three: c3, single: c1, row: row, freq: freq, split: split },
+      todo: {
+        three: c3, single: c1, row: row, freq: freq, split: split, maker: maker, name: M.name, source: M.source,
+        warn: split.overSingle ? ['単相負荷として無条件に使用できるのは ' + split.overSingle + 'kVA 以下です。超える場合は設備全体の不平衡率を30%以下としてください（内線規程 1305節、' + M.name + '）。'] : []
+      },
       eb: eb
     });
   }

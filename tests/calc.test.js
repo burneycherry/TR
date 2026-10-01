@@ -395,18 +395,45 @@ test('灯動共用（日立）：一次は定格容量の三相、二次は負�
   near(r.eb.phaseKva, 50 + 50 / 3, 1e-9); // 66.7kVA・200V級 → 22mm²
   assert.strictEqual(r.eb.label, '22mm²');
   // ⑤150kVA：三相90 → 単相55、三相100 → 単相50、単相50 → 三相100
-  const sp = (k, side, v) => { const x = C.todoSplit(k, side, v); return x.three + '+' + x.single; };
+  const sp = (k, side, v) => { const x = C.todoSplit('hitachi', k, side, v); return x.three + '+' + x.single; };
   assert.strictEqual(sp(150, 'three', 90), '90+55');
   assert.strictEqual(sp(150, 'three', null), '100+50');
   assert.strictEqual(sp(150, 'single', 50), '100+50');
   assert.strictEqual(sp(70, 'single', 30), '30+30');
   assert.strictEqual(sp(125, 'three', 75), '75+50');
-  assert.ok(C.todoSplit(150, 'three', 160).error); // 最大超過
+  assert.ok(C.todoSplit('hitachi', 150, 'three', 160).error); // 最大超過
   const r5 = C.calculate({ mode: 'todo', kva: 150, v1: 6600, v2: 210, todoSide: 'three', todoLoad: 90 });
   assert.strictEqual(r5.todo.three.ct.ratio, '400/5A'); // 247.4×1.25=309.3
   assert.strictEqual(r5.todo.single.input.kva, 55);
   assert.throws(() => C.calculate({ mode: 'todo', kva: 150, v1: 6600, v2: 210, todoLoad: 150 })); // 単相0
   assert.throws(() => C.calculate({ mode: 'todo', kva: 90, v1: 6600, v2: 210 })); // 標準外
+});
+
+test('灯動共用（三菱 ダブルパワー RA-3R）：負荷分担曲線・%Z下限・単相100kVA超の注意', () => {
+  const r = C.calculate({ mode: 'todo', todoMaker: 'mitsubishi', kva: 300, v1: 6600, v2: 210 });
+  assert.strictEqual(r.input.kva3, 200); // 【200+100】
+  assert.strictEqual(r.input.kva1, 100);
+  assert.strictEqual(r.z.tr, 2.2); // 保証値 2.2～4.1 の下限
+  assert.strictEqual(r.todo.three.ct.ratio, '750/5A'); // 549.9×1.25=687.3
+  assert.strictEqual(r.todo.single.ct.ratio, '600/5A'); // 476.2×1.25=595.2
+  near(r.eb.phaseKva, 100 + 200 / 3, 1e-9); // 166.7kVA・200V級 → 60mm²
+  assert.strictEqual(r.eb.label, '60mm²');
+  assert.strictEqual(r.todo.warn.length, 0);
+  const sp = (k, side, v) => { const x = C.todoSplit('mitsubishi', k, side, v); return x.three + '+' + x.single; };
+  assert.strictEqual(sp(150, 'three', null), '100+50');
+  assert.strictEqual(sp(300, 'three', 250), '250+50');
+  assert.strictEqual(sp(200, 'three', 133), '133+67');
+  assert.strictEqual(sp(500, 'three', 399.3), '399.3+99.2');
+  const r5 = C.calculate({ mode: 'todo', todoMaker: 'mitsubishi', kva: 500, v1: 6600, v2: 210 }); // 【333+167】
+  assert.strictEqual(r5.input.kva1, 167);
+  assert.strictEqual(r5.todo.warn.length, 1); // 単相 100kVA 超
+  assert.deepStrictEqual(C.data.todo.makers.mitsubishi.rows.map((x) => x[0]), [50, 75, 100, 150, 200, 300, 500]);
+  Object.values(C.data.todo.makers).forEach((M) => Object.keys(M.curves).forEach((k) => {
+    const c = M.curves[k];
+    assert.strictEqual(c[c.length - 1][0], Number(k)); // 終点＝定格容量
+    assert.ok(c.every((p, i) => i === 0 || (p[0] > c[i - 1][0] && p[1] < c[i - 1][1]))); // 単調
+  }));
+  assert.throws(() => C.calculate({ mode: 'todo', todoMaker: 'mitsubishi', kva: 70, v1: 6600, v2: 210 })); // 三菱に70なし
 });
 
 test('スコットは一次電圧で高圧/低圧を判定', () => {
