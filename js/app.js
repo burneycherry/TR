@@ -251,7 +251,7 @@
     // EB（B種接地線）
     if (r.eb) {
       const e = r.eb;
-      const t2 = e.t2 ? '表2.13.2（遮断器等 ' + fmt(e.breakerA, 0) + 'A → ' + e.t2.limit + 'A以下）：' + e.t2.label + (e.byT2 ? ' ← 採用' : '') : '表2.13.2：' + fmt(e.breakerA, 0) + 'A は表の範囲外（1000A超）';
+      const t2 = e.hv ? '一次側が高圧のため表2.13.2（遮断器定格）は適用しない' : e.t2 ? '表2.13.2（遮断器等 ' + fmt(e.breakerA, 0) + 'A → ' + e.t2.limit + 'A以下）：' + e.t2.label + (e.byT2 ? ' ← 採用' : '') : '表2.13.2：' + fmt(e.breakerA, 0) + 'A は表の範囲外（1000A超）';
       const eb = '<div class="kv">' + kvItem('EB 接地線', e.label ? esc(e.label) : '個別検討', '') +
         kvItem('一相分容量', fmt(e.phaseKva, 1), 'kVA') + '</div>' +
         '<p class="sub-note">表2.13.1（' + e.voltClass + '）：' + (e.sq !== null ? e.sq + 'mm²' : '範囲外') + (e.byT2 ? '' : ' ← 採用') + '<br>' + esc(t2) + '</p>' +

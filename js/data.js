@@ -7,7 +7,7 @@
  * .claude/skills/update-maker-data/SKILL.md を参照。
  */
 var TR_DATA = {
-  version: '2026-10-01q',
+  version: '2026-10-01r',
 
   // 標準容量 [kVA]（入力候補）
   capacities: {

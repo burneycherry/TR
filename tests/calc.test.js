@@ -112,20 +112,27 @@ test('スコット 低圧/低圧：一次側ブレーカー、LBSなし、EBは�
   });
 });
 
-test('EB：表2.13.2（遮断器定格）の方が太ければ採用', () => {
-  // 三相300kVA 210V：表2.13.1→38mm²、二次824.8A→表2.13.2 1000A以下→60mm²
-  const r = C.calculate({ mode: 'three', kva: 300, v1: 6600, v2: 210 });
-  assert.strictEqual(r.eb.sq, 38);
-  assert.strictEqual(r.eb.byT2, true);
-  assert.strictEqual(r.eb.label, '60mm²');
-  // 三相100kVA 210V：表2.13.1→14mm²、274.9A→表2.13.2 400A以下→22mm²
+test('EB：一次高圧は表2.13.1 のみ（遮断器定格から求めない）', () => {
+  // 三相100kVA 6600/210V：一相33.3kVA・200V級 → 14mm²（遮断器 274.9A でも 22mm² にしない）
   const r1 = C.calculate({ mode: 'three', kva: 100, v1: 6600, v2: 210 });
+  assert.strictEqual(r1.eb.label, '14mm²');
+  assert.strictEqual(r1.eb.byT2, false);
+  assert.strictEqual(r1.eb.t2, null);
+  // 三相300kVA 6600/210V：38mm²
+  assert.strictEqual(C.calculate({ mode: 'three', kva: 300, v1: 6600, v2: 210 }).eb.label, '38mm²');
+  // 単相10kVA：5.5mm²
+  assert.strictEqual(C.calculate({ mode: 'single', kva: 10, v1: 6600, v2: 210 }).eb.label, '5.5mm²');
+});
+
+test('EB：一次低圧は表2.13.2（遮断器定格）の方が太ければ採用', () => {
+  // 三相100kVA 440/210V：表2.13.1→14mm²、274.9A→表2.13.2 400A以下→22mm²
+  const r1 = C.calculate({ mode: 'three', kva: 100, v1: 440, v2: 210 });
   assert.strictEqual(r1.eb.label, '22mm²');
   assert.strictEqual(r1.eb.byT2, true);
-  // 単相10kVA 210V：表2.13.1→5.5mm²、47.6A→表2.13.2 2.0mm（細い）→表2.13.1
-  const r0 = C.calculate({ mode: 'single', kva: 10, v1: 6600, v2: 210 });
-  assert.strictEqual(r0.eb.byT2, false);
-  assert.strictEqual(r0.eb.label, '5.5mm²');
+  // selectEB 直接：三相300kVA 824.8A→表2.13.2 1000A以下→60mm²
+  const r = C.selectEB('three', 300, 210, 824.8);
+  assert.strictEqual(r.sq, 38);
+  assert.strictEqual(r.label, '60mm²');
   // 遮断器定格 1000A 超は表2.13.2 範囲外 → 表2.13.1
   const r2 = C.selectEB('three', 1000, 210, 2749);
   assert.strictEqual(r2.t2, null);
