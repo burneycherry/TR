@@ -18,11 +18,11 @@ description: js/data.js の選定テーブル（LBSヒューズ・MCCB/ACB の�
 | `lbs.makers.fuji.oil/mold[3300|6600]` | `rows`(三相kVA, 0=なし) × `cols`(単相kVA, 0=なし) の `g` 行列 |
 | `breaker.makers.<maker>.list` | MCCB。**フレーム昇順→同フレームは下位グレード順**。`{model, af, ratings[], icu:[230V級,440V級], branchAf?}` |
 | `breaker.makers.<maker>.acb` | ACB。同上の並び。富士 DH は icu=[JEC220V, JIS440V] |
-| `ct` | `factor`, `primaries[]`（/5A） |
+| `ct` | `factor`, `primaries[]`（/5A、Y-0550 CWシリーズ）、`models`=`[一次A以下, 形名, VA]` |
 | `thr` | `{name, model, step}`（富士 TU-0、整定は step 単位で切り捨て） |
 | `eb.table` | `[100V級, 200V級, 400V級 の一相分kVA以下, mm²]`（表2.13.1） |
 | `eb.table2` | `[遮断器定格A以下, 表示, 比較用mm²]`（表2.13.2） |
-| `cable.tables[]` | `{group, temp, name, basis, limits[], sizes[]}`（A以下→sq、昇順・同数、最小5.5sq）、`maxParallel:2`、`parallelRatio:0.6` |
+| `cable.tables[]` | `{group, temp, name, basis, limits[], sizes[]}`（60℃ IV・FP と 75℃ の2表。A以下→sq、昇順・同数、最小5.5sq）、`maxParallel:2`、`parallelRatio:0.6` |
 | `busbar.table` | `[表示名, 許容A]`（許容電流の昇順） |
 
 3. 確認済みテーブルは `verified: true`、`version` を当日の日付（同日複数回は末尾に英字）に。

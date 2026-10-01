@@ -120,7 +120,11 @@
   function selectCT(i2) {
     const need = i2 * D.ct.factor;
     const p = pickAtLeast(D.ct.primaries, need);
-    return { need: need, primary: p, secondary: D.ct.secondary, ratio: p ? p + '/' + D.ct.secondary + 'A' : null };
+    let model = null;
+    for (let i = 0; p && i < D.ct.models.length; i++) {
+      if (p <= D.ct.models[i][0]) { model = { name: D.ct.models[i][1], va: D.ct.models[i][2] }; break; }
+    }
+    return { need: need, primary: p, secondary: D.ct.secondary, ratio: p ? p + '/' + D.ct.secondary + 'A' : null, model: model };
   }
 
   // THR 整定値：CT二次換算の定格電流を step 単位で必ず切り捨て

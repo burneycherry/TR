@@ -215,9 +215,11 @@
     // CT
     const ctBody = '<div class="kv">' + kvItem('変流比', r.ct.ratio ? esc(r.ct.ratio) : '該当なし', '') +
       kvItem('定格時 CT二次', r.ct.primary ? fmt(r.i2 * r.ct.secondary / r.ct.primary, 2) : '-', 'A') + '</div>' +
-      '<p class="sub-note">基準: CT一次 ≥ I₂ × ' + D.ct.factor + '（= ' + fmt(r.ct.need, 1) + 'A）。負担は計器・THR・配線の合計VA以上（' + D.ct.burdens.join('/') + 'VA から選定）。</p>';
+      '<p class="sub-note">基準: CT一次 ≥ I₂ × ' + D.ct.factor + '（= ' + fmt(r.ct.need, 1) + 'A）の最小標準値（' + esc(D.ct.source) + '）。' +
+      (r.ct.model ? '形名例：三菱 ' + esc(r.ct.model.name) + '（' + r.ct.model.va + 'VA）。' : '') +
+      '負担は計器・THR・配線の合計VA以上。</p>';
     html += card('二次側 CT' + per, ctBody);
-    t.push('二次側CT' + (n > 1 ? '(各座)' : '') + ': ' + (r.ct.ratio || '該当なし'));
+    t.push('二次側CT' + (n > 1 ? '(各座)' : '') + ': ' + (r.ct.ratio || '該当なし') + (r.ct.model ? '（' + r.ct.model.name + '）' : ''));
 
     // THR
     if (r.thr) {

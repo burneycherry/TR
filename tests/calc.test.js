@@ -160,6 +160,15 @@ test('CT・THR', () => {
   assert.strictEqual(r.thr.model, 'TU-0');
 });
 
+test('CT：Y-0550 の定格一次電流（1φ20kVA → 120/5A）', () => {
+  const r = C.calculate({ mode: 'single', kva: 20, v1: 6600, v2: 210 });
+  assert.strictEqual(r.ct.ratio, '120/5A'); // 95.2A × 1.25 = 119A
+  assert.strictEqual(r.ct.model.name, 'CW-15L / CW-15LM');
+  assert.strictEqual(C.selectCT(30).ratio, '40/5A');
+  assert.strictEqual(C.selectCT(130).ratio, '180/5A');
+  assert.strictEqual(C.selectCT(700).model.name, 'CW-40LM');
+});
+
 test('THR 例：単相100kVA 210V → CT 600/5A、TU-0 3.9A', () => {
   const r = C.calculate({ mode: 'single', kva: 100, v1: 6600, v2: 210 });
   assert.strictEqual(r.ct.ratio, '600/5A');
@@ -274,8 +283,14 @@ test('電線・銅バーは設計電流以上', () => {
 });
 
 test('電線規準・銅バー規準の転記値', () => {
-  const pick = (cur) => { const c = C.selectCable(cur)[0]; return c.sq === null ? null : c.sq + 'x' + c.parallel; };
-  assert.strictEqual(C.selectCable(100).length, 1); // 75℃ のみ
+  const pick = (cur) => { const c = C.selectCable(cur).find((x) => x.temp === '75℃'); return c.sq === null ? null : c.sq + 'x' + c.parallel; };
+  assert.deepStrictEqual(C.selectCable(100).map((x) => x.temp), ['60℃', '75℃']); // IV・FP 60℃ と 75℃
+  const p60 = (cur) => { const c = C.selectCable(cur)[0]; return c.sq === null ? null : c.sq + 'x' + c.parallel; };
+  assert.strictEqual(p60(20), '5.5x1'); // 3.5sq は使わない
+  assert.strictEqual(p60(95.2), '38x1'); // 125A以下→38sq
+  assert.strictEqual(p60(225), '100x1');
+  assert.strictEqual(p60(700), '250x2'); // 420A ≤ 450A
+  assert.strictEqual(p60(800), null); // 480A > 450A → 銅バーのみ
   // 最小 5.5sq（3.5sq は使わない）
   assert.strictEqual(pick(10), '5.5x1');
   assert.strictEqual(pick(30), '5.5x1');
