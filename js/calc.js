@@ -143,9 +143,10 @@
 
   // 電線規準の各表で選定。1条で収まらなければ2条引き（1本の許容 ≥ 電流×0.6、JSIA）
   // 2条でも収まらなければ電線は選定せず銅バーのみ
-  function selectCable(current) {
+  // tables 省略時は社内規準キュービクル表（分岐ブレーカー一次側、遮断器容量基準）
+  function selectCable(current, tables) {
     const C = D.cable;
-    return C.tables.map(function (t) {
+    return (tables || C.tables).map(function (t) {
       const base = { group: t.group, temp: t.temp, name: t.name, basis: t.basis };
       for (let n = 1; n <= C.maxParallel; n++) {
         const need = n === 1 ? current : current * C.parallelRatio;
@@ -221,7 +222,9 @@
         const ratings = pickB.ratings.filter(function (r) { return r <= max; });
         rows.push({
           af: f.af, model: pickB.model, icu: pickB.icu[col], ok: !!hit,
-          minRating: ratings[0], maxRating: ratings[ratings.length - 1]
+          minRating: ratings[0], maxRating: ratings[ratings.length - 1],
+          // 母線銅バー → 分岐ブレーカー一次側の電線（フレーム最大定格の遮断器容量基準）
+          cable: selectCable(ratings[ratings.length - 1])
         });
         if (ratings[ratings.length - 1] >= i2) { break; }
       }
@@ -307,7 +310,7 @@
       z: { tr: zTr, trIsDefault: !(zInput > 0), src: zSrc, total: zTotal },
       i1: i1, i2: i2, iscKa: iscKa,
       fuse: fuse, primaryBreaker: primaryBreaker, ct: ct, thr: thr, breaker: brk, branch: branch,
-      conductor: { design: design, byBreaker: !!brk, cable: selectCable(design), busbar: selectBusbar(design) },
+      conductor: { design: design, byBreaker: !!brk, cable: selectCable(design, D.busCable.tables), busbar: selectBusbar(design) },
       eb: selectEB(mode, kva, v2, design)
     };
   }

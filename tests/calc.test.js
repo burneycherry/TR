@@ -328,10 +328,36 @@ test('不正入力はエラー', () => {
   assert.throws(() => C.calculate({ phase: 3, kva: 0, v1: 6600, v2: 210 }));
 });
 
+test('母線電線は許容電流表（IV60℃/HIV75℃/KIP80℃）で選定', () => {
+  const T = C.data.busCable.tables;
+  const pick = (cur, temp) => { const c = C.selectCable(cur, T).find((x) => x.temp === temp); return c.sq === null ? null : c.sq + 'x' + c.parallel; };
+  // 単相100kVA 210V → 476.2A
+  const r = C.calculate({ mode: 'single', kva: 100, v1: 6600, v2: 210 });
+  assert.deepStrictEqual(r.conductor.cable.map((x) => x.temp), ['60℃', '75℃', '80℃']);
+  assert.strictEqual(pick(476.2, '60℃'), '325x1'); // 530A
+  assert.strictEqual(pick(476.2, '75℃'), '200x1'); // 506A
+  assert.strictEqual(pick(476.2, '80℃'), '200x1'); // 455A 不足 → 541A
+  assert.strictEqual(pick(40, '60℃'), '5.5x1');
+  assert.strictEqual(pick(52, '75℃'), '5.5x1');
+  assert.strictEqual(pick(60, '80℃'), '8x1'); // KIP は 8sq から
+  assert.strictEqual(pick(1000, '75℃'), '250x2'); // 600A ≥ 600A
+  assert.strictEqual(pick(1200, '75℃'), null); // 720A > 702A → 銅バーのみ
+});
+
+test('分岐ブレーカーにフレーム最大定格の配線サイズ（キュービクル表）', () => {
+  const r = C.calculate({ mode: 'three', kva: 100, v1: 6600, v2: 210 });
+  r.branch.makers.mitsubishi.rows.forEach((x) => {
+    const want = C.selectCable(x.maxRating).map((c) => c.sq + 'x' + c.parallel);
+    assert.deepStrictEqual(x.cable.map((c) => c.sq + 'x' + c.parallel), want);
+  });
+  const f225 = r.branch.makers.mitsubishi.rows.find((x) => x.af === 225);
+  assert.deepStrictEqual(f225.cable.map((c) => c.temp + ':' + c.sq), ['60℃:100', '75℃:60']);
+});
+
 test('データ表は昇順', () => {
   const asc = (a) => a.every((v, i) => i === 0 || a[i - 1] < v);
   assert.ok(asc(C.data.ct.primaries));
-  C.data.cable.tables.forEach((t) => {
+  C.data.cable.tables.concat(C.data.busCable.tables).forEach((t) => {
     assert.ok(asc(t.limits)); assert.ok(asc(t.sizes)); assert.strictEqual(t.limits.length, t.sizes.length);
     assert.ok(t.sizes[0] >= 5.5);
   });

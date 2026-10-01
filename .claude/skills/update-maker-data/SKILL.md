@@ -23,6 +23,7 @@ description: js/data.js の選定テーブル（LBSヒューズ・MCCB/ACB の�
 | `eb.table` | `[100V級, 200V級, 400V級 の一相分kVA以下, mm²]`（表2.13.1） |
 | `eb.table2` | `[遮断器定格A以下, 表示, 比較用mm²]`（表2.13.2） |
 | `cable.tables[]` | `{group, temp, name, basis, limits[], sizes[]}`（60℃ IV・FP と 75℃ の2表。A以下→sq、昇順・同数、最小5.5sq）、`maxParallel:2`、`parallelRatio:0.6` |
+| `busCable.tables[]` | 母線電線の許容電流表（IV 60℃・HIV 75℃・KIP 80℃）。形式は `cable.tables` と同じ |
 | `busbar.table` | `[表示名, 許容A]`（許容電流の昇順） |
 
 3. 確認済みテーブルは `verified: true`、`version` を当日の日付（同日複数回は末尾に英字）に。

@@ -230,51 +230,23 @@
       t.push('THR: ' + th.name + ' ' + th.model + ' 整定 ' + fmt(th.setting, 1) + 'A（CT ' + th.ct + '）');
     }
 
-    // 主幹ブレーカー（必要時のみ）
-    if (r.breaker) {
-      let bb = '<p class="sub-note" style="margin-top:0">条件: 定格 ≥ ' + fmt(r.breaker.need, 1) + 'A、' + r.breaker.voltClass + ' Icu ≥ ' + fmt(r.iscKa, 2) + 'kA' + (r.input.mode === 'three' ? '' : '（2P）') + '</p><table class="res">';
-      bb += breakerRows(r.breaker, t, '主幹');
-      bb += '</table>';
-      html += card('二次側 主幹ブレーカー' + per, bb, anyUnverified(r.breaker.makers));
-    }
-
-    // 分岐ブレーカー（フレーム別）
-    const br = r.branch;
-    let brb = '<p class="sub-note" style="margin-top:0">条件: ' + br.voltClass + ' Icu ≥ ' + fmt(r.iscKa, 2) + 'kA' + (r.input.mode === 'three' ? '' : '（2P）') +
-      '。二次定格電流 ' + fmt(r.i2, 1) + 'A を流せるフレームまで表示</p>';
-    Object.keys(br.makers).forEach(function (k) {
-      const m = br.makers[k];
-      brb += '<h3 class="sub-h">' + esc(m.name) + '　<small>' + esc(m.series) + '</small></h3><table class="res">';
-      const tx = [];
-      m.rows.forEach(function (x) {
-        const range = x.minRating === x.maxRating ? x.maxRating + 'A' : x.minRating + '〜' + x.maxRating + 'A';
-        const val = x.ok ? '<strong>' + esc(x.model) + '</strong><br>' + note('Icu ' + x.icu + 'kA　定格 ' + range)
-          : '<strong>該当なし</strong><br>' + note('最大 ' + esc(x.model) + ' Icu ' + x.icu + 'kA で不足（カスケード等を検討）');
-        brb += row(x.af + 'AF', val);
-        tx.push(x.af + 'AF ' + (x.ok ? x.model : '該当なし'));
-      });
-      brb += '</table>';
-      t.push('分岐(' + m.name + '): ' + tx.join(' / '));
-    });
-    html += card('二次側 分岐ブレーカー（フレーム別）' + per, brb, anyUnverified(br.makers));
-
     // 電線・銅バー
     const cd = r.conductor;
     let cb = '<p class="sub-note" style="margin-top:0">設計電流 ' + fmt(cd.design, cd.byBreaker ? 0 : 1) + 'A（' + (cd.byBreaker ? '主幹ブレーカー定格以上' : '二次定格電流') + '）</p><table class="res">';
     const cabTxts = [];
     cd.cable.forEach(function (c) {
       const txt = c.sq ? c.sq + 'sq' + (c.parallel > 1 ? ' × ' + c.parallel + '条' : '') : '—（2条超のため銅バー）';
-      const sub = !c.sq ? c.name : c.name + '　' + c.basis + ' ' + c.limit + 'A以下' +
+      const sub = !c.sq ? c.name : c.name + '　' + '許容電流 ' + c.limit + 'A' +
         (c.parallel > 1 ? '（2条：1本 ≥ ' + fmt(c.need, 1) + 'A＝電流×' + D.cable.parallelRatio + '）' : '');
-      cb += row(esc(c.group) + '<br>' + esc(c.temp), '<strong>' + esc(txt) + '</strong><br>' + note(esc(sub)));
-      cabTxts.push(c.group + c.temp + ' ' + txt);
+      cb += row(esc(c.name.split('（')[0]) + '<br>' + esc(c.temp), '<strong>' + esc(txt) + '</strong><br>' + note(esc(sub)));
+      cabTxts.push(c.name.split('（')[0] + ' ' + c.temp + ' ' + txt);
     });
     const bus = cd.busbar;
     cb += row('銅バー', '<strong>' + (bus ? esc(bus.size) : '該当なし（個別設計）') + '</strong>' + (bus ? '<br>' + note('許容 ' + bus.ampacity + 'A') : ''));
-    cb += '</table><p class="sub-note">' + esc(D.cable.note) + '<br>' + esc(D.busbar.note) + '</p>';
-    html += card('二次側 電線・銅バー' + per, cb, !(D.cable.verified && D.busbar.verified));
-    t.push('電線: ' + cabTxts.join(' / '));
-    t.push('銅バー: ' + (bus ? bus.size : '該当なし'));
+    cb += '</table><p class="sub-note">' + esc(D.busCable.note) + '<br>' + esc(D.busbar.note) + '</p>';
+    html += card('二次側 母線（電線・銅バー）' + per, cb, !(D.busCable.verified && D.busbar.verified));
+    t.push('母線電線: ' + cabTxts.join(' / '));
+    t.push('母線銅バー: ' + (bus ? bus.size : '該当なし'));
 
     // EB（B種接地線）
     if (r.eb) {
@@ -287,6 +259,37 @@
       html += card('EB（B種接地線）サイズ', eb, e.verified === false);
       t.push('EB: ' + (e.label || '個別検討') + (e.byT2 ? '（表2.13.2による）' : ''));
     }
+
+    // 主幹ブレーカー（必要時のみ）
+    if (r.breaker) {
+      let bb = '<p class="sub-note" style="margin-top:0">条件: 定格 ≥ ' + fmt(r.breaker.need, 1) + 'A、' + r.breaker.voltClass + ' Icu ≥ ' + fmt(r.iscKa, 2) + 'kA' + (r.input.mode === 'three' ? '' : '（2P）') + '</p><table class="res">';
+      bb += breakerRows(r.breaker, t, '主幹');
+      bb += '</table>';
+      html += card('二次側 主幹ブレーカー' + per, bb, anyUnverified(r.breaker.makers));
+    }
+
+    // 分岐ブレーカー（フレーム別）
+    const br = r.branch;
+    let brb = '<p class="sub-note" style="margin-top:0">条件: ' + br.voltClass + ' Icu ≥ ' + fmt(r.iscKa, 2) + 'kA' + (r.input.mode === 'three' ? '' : '（2P）') +
+      '。二次定格電流 ' + fmt(r.i2, 1) + 'A を流せるフレームまで表示。配線は母線銅バー〜分岐ブレーカー一次側（キュービクル表・フレーム最大定格の遮断器容量基準、IV・FP 60℃／HIV・WL1・EM-IE 75℃）</p>';
+    Object.keys(br.makers).forEach(function (k) {
+      const m = br.makers[k];
+      brb += '<h3 class="sub-h">' + esc(m.name) + '　<small>' + esc(m.series) + '</small></h3><table class="res">';
+      const tx = [];
+      m.rows.forEach(function (x) {
+        const range = x.minRating === x.maxRating ? x.maxRating + 'A' : x.minRating + '〜' + x.maxRating + 'A';
+        const val = x.ok ? '<strong>' + esc(x.model) + '</strong><br>' + note('Icu ' + x.icu + 'kA　定格 ' + range)
+          : '<strong>該当なし</strong><br>' + note('最大 ' + esc(x.model) + ' Icu ' + x.icu + 'kA で不足（カスケード等を検討）');
+        const wires = x.cable.map(function (c) {
+          return c.temp + ' ' + (c.sq ? c.sq + 'sq' + (c.parallel > 1 ? '×' + c.parallel + '条' : '') : '銅バー');
+        });
+        brb += row(x.af + 'AF', val + '<br>' + note('配線 ' + esc(wires.join('／'))));
+        tx.push(x.af + 'AF ' + (x.ok ? x.model : '該当なし') + '（配線 ' + wires.join('/') + '）');
+      });
+      brb += '</table>';
+      t.push('分岐(' + m.name + '): ' + tx.join(' / '));
+    });
+    html += card('二次側 分岐ブレーカー（フレーム別）' + per, brb, anyUnverified(br.makers));
 
     el.results.innerHTML = html;
     t.push('※メーカーカタログ・内線規程・社内規準による選定（data ' + D.version + '）');
