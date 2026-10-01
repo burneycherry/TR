@@ -126,23 +126,17 @@
     return { need: need, primary: p, secondary: D.ct.secondary, ratio: p ? p + '/' + D.ct.secondary + 'A' : null };
   }
 
+  // THR 整定値：CT二次換算の定格電流を step 単位で切り捨て
   function selectTHR(i2, ctPrimary) {
     if (!ctPrimary) { return null; }
-    const setting = i2 * D.ct.secondary / ctPrimary;
-    const makers = {};
-    Object.keys(D.thr.makers).forEach(function (k) {
-      const m = D.thr.makers[k];
-      let best = null;
-      m.heaters.forEach(function (h) {
-        if (setting >= h[1] && setting <= h[2]) {
-          // 調整範囲の中央に近いものを優先
-          const score = Math.abs(setting - (h[1] + h[2]) / 2);
-          if (!best || score < best.score) { best = { nominal: h[0], min: h[1], max: h[2], score: score }; }
-        }
-      });
-      makers[k] = { name: m.name, model: m.model, heater: best, verified: m.verified };
-    });
-    return { setting: setting, makers: makers };
+    const raw = i2 * D.ct.secondary / ctPrimary;
+    const step = D.thr.step;
+    // 浮動小数誤差対策で微小値を足してから切り捨て
+    const setting = Math.floor(raw / step + 1e-9) * step;
+    return {
+      raw: raw, setting: Number(setting.toFixed(2)), ct: ctPrimary + '/' + D.ct.secondary + 'A',
+      name: D.thr.name, model: D.thr.model, verified: D.thr.verified
+    };
   }
 
   // 電線規準の各表で選定。単条で収まらなければ並列条数を増やす

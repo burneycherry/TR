@@ -227,18 +227,11 @@
 
     // THR
     if (r.thr) {
-      let tb = '<p class="sub-note" style="margin-top:0">整定値（変圧器定格時のCT二次電流）: <strong>' + fmt(r.thr.setting, 2) + 'A</strong></p><table class="res">';
-      t.push('THR整定: ' + fmt(r.thr.setting, 2) + 'A');
-      Object.keys(r.thr.makers).forEach(function (k) {
-        const m = r.thr.makers[k];
-        const h = m.heater;
-        const val = h ? '<strong>ヒータ ' + h.nominal + 'A</strong><br>' + note(esc(m.model) + '（調整範囲 ' + h.min + '〜' + h.max + 'A）')
-          : '<strong>該当なし</strong><br>' + note('CT比を見直してください');
-        tb += row(esc(m.name), val);
-        t.push('THR(' + m.name + '): ' + (h ? m.model + ' ヒータ' + h.nominal + 'A(' + h.min + '-' + h.max + 'A)' : '該当なし'));
-      });
-      tb += '</table>';
-      html += card('二次側 THR（サーマルリレー）' + per, tb, anyUnverified(r.thr.makers));
+      const th = r.thr;
+      const tb = '<div class="kv">' + kvItem('整定値', fmt(th.setting, 1), 'A') + kvItem('機種', esc(th.name + ' ' + th.model), '') + '</div>' +
+        '<p class="sub-note">I₂ ' + fmt(r.i2, 1) + 'A × 5 / ' + esc(th.ct.split('/')[0]) + ' = ' + fmt(th.raw, 3) + 'A → ' + D.thr.step + 'A 単位で切り捨て</p>';
+      html += card('二次側 THR（サーマルリレー）' + per, tb, th.verified === false);
+      t.push('THR: ' + th.name + ' ' + th.model + ' 整定 ' + fmt(th.setting, 1) + 'A（CT ' + th.ct + '）');
     }
 
     // 主幹ブレーカー

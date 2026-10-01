@@ -124,11 +124,15 @@ test('手入力電圧（任意値）でも計算できる', () => {
 test('CT・THR', () => {
   const r = C.calculate({ phase: 3, kva: 300, v1: 6600, v2: 210 });
   assert.strictEqual(r.ct.ratio, '1200/5A');
-  near(r.thr.setting, 824.8 * 5 / 1200, 0.01);
-  Object.values(r.thr.makers).forEach((m) => {
-    assert.ok(m.heater, m.name + ' heater');
-    assert.ok(m.heater.min <= r.thr.setting && r.thr.setting <= m.heater.max);
-  });
+  near(r.thr.raw, 824.8 * 5 / 1200, 0.01);
+  assert.strictEqual(r.thr.setting, 3.4);
+  assert.strictEqual(r.thr.model, 'TU-0');
+});
+
+test('THR 例：単相100kVA 210V → CT 600/5A、TU-0 3.9A', () => {
+  const r = C.calculate({ mode: 'single', kva: 100, v1: 6600, v2: 210 });
+  assert.strictEqual(r.ct.ratio, '600/5A');
+  assert.strictEqual(r.thr.setting, 3.9);
 });
 
 test('ブレーカーは定格・遮断容量を満たす', () => {
@@ -150,11 +154,11 @@ test('電線・銅バーは設計電流以上', () => {
 
 test('電線規準・銅バー規準の転記値', () => {
   const byName = (cur) => C.selectCable(cur).map((c) => c.sq + 'x' + c.parallel);
-  // [キュービクル60℃, キュービクル75℃, 盤類60℃, 盤類75℃]
-  assert.deepStrictEqual(byName(225), ['100x1', '60x1', '150x1', '100x1']);
-  assert.deepStrictEqual(byName(400), ['250x1', '150x1', '250x1', '150x1']);
-  assert.deepStrictEqual(byName(100), ['38x1', '22x1', '38x1', '22x1']);
-  assert.deepStrictEqual(byName(1000), ['200x3', '200x2', '200x3', '250x2']);
+  // [キュービクル60℃, キュービクル75℃]
+  assert.deepStrictEqual(byName(225), ['100x1', '60x1']);
+  assert.deepStrictEqual(byName(400), ['250x1', '150x1']);
+  assert.deepStrictEqual(byName(100), ['38x1', '22x1']);
+  assert.deepStrictEqual(byName(1000), ['200x3', '200x2']);
   assert.strictEqual(C.selectBusbar(800).size, '10t×50');
   assert.strictEqual(C.selectBusbar(1250).size, '10t×100');
   assert.strictEqual(C.selectBusbar(4000).size, '15t×150×2');
