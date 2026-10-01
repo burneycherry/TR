@@ -134,10 +134,16 @@
     Object.keys(b.makers).forEach(function (k) {
       const m = b.makers[k];
       const p = m.pick;
-      const val = p ? '<strong>' + esc(p.model) + ' ' + p.rating + 'AT</strong><br>' + note(esc(m.series) + '　' + p.af + 'AF　Icu ' + p.icu + 'kA（' + b.voltClass + '）')
-        : '<strong>該当なし</strong><br>' + note(esc(m.overNote || '上位機種・カスケード遮断等を個別検討'));
+      const a = m.acb;
+      let val = p ? '<strong>' + esc(p.model) + ' ' + p.rating + 'AT</strong><br>' + note(p.af + 'AF　Icu ' + p.icu + 'kA（' + b.voltClass + '）')
+        : '<strong>MCCB 該当なし</strong><br>' + note(esc(m.overNote || '上位機種・カスケード遮断等を個別検討'));
+      // 800A 以上、または MCCB で選べない場合は ACB も示す
+      if (a && (!p || b.need >= 800)) {
+        val += '<br><span class="acb">ACB：<strong>' + esc(a.model) + '</strong> ' + a.rating + 'A　Icu ' + a.icu + 'kA</span>';
+      }
       h += row(esc(m.name), val);
-      t.push(label + '(' + m.name + '): ' + (p ? p.model + ' ' + p.rating + 'AT(' + p.af + 'AF) Icu' + p.icu + 'kA' : '該当なし'));
+      t.push(label + '(' + m.name + '): ' + (p ? p.model + ' ' + p.rating + 'AT(' + p.af + 'AF) Icu' + p.icu + 'kA' : 'MCCB該当なし') +
+        (a && (!p || b.need >= 800) ? ' / ACB ' + a.model + ' ' + a.rating + 'A' : ''));
     });
     return h;
   }

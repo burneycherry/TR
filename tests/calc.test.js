@@ -203,10 +203,18 @@ test('主幹ブレーカー：カタログ転記値で選定', () => {
   assert.deepStrictEqual(pick({ mode: 'three', kva: 500, v2: 440 }), ['NF800-CEW 700', 'BW800EAG 700']);
   // 三相300kVA 210V：824.8A → 1000AF
   assert.deepStrictEqual(pick({ mode: 'three', kva: 300, v2: 210 }), ['NF1000-SEW 900', 'BW1000RAE 900']);
-  // 三相1000kVA 210V：2749A → 3200AF
-  assert.deepStrictEqual(pick({ mode: 'three', kva: 1000, v2: 210 }), ['AE3200-SW (ACB) 3200', 'BW3200RAE 2800']);
-  // 三相2000kVA 210V：5499A → 富士は範囲外
+  // 三相1000kVA 210V：2749A・74.3kA → 三菱MCCBは1600AFまで、富士 BW3200RAE
+  assert.deepStrictEqual(pick({ mode: 'three', kva: 1000, v2: 210 }), [null, 'BW3200RAE 2800']);
+  const acb = (o) => {
+    const r = C.calculate(Object.assign({ v1: 6600, mainBreaker: true }, o)).breaker.makers;
+    return [r.mitsubishi.acb && r.mitsubishi.acb.model, r.fuji.acb && r.fuji.acb.model];
+  };
+  assert.deepStrictEqual(acb({ mode: 'three', kva: 1000, v2: 210 }), ['AE3200-SW', 'DH30']);
+  // 三相2000kVA 210V：5499A・94.8kA → ACB 6300AF（富士 DH60 120kA、三菱 AE6300-SW 130kA）
   assert.strictEqual(pick({ mode: 'three', kva: 2000, v2: 210 })[1], null);
+  assert.deepStrictEqual(acb({ mode: 'three', kva: 2000, v2: 210 }), ['AE6300-SW', 'DH60']);
+  // 三相500kVA 210V %Z4：1375A・34.4kA → AE1600-SW / DH16
+  assert.deepStrictEqual(acb({ mode: 'three', kva: 500, v2: 210, z: 4 }), ['AE1600-SW', 'DH16']);
   // 遮断容量で上位グレードへ：三相150kVA 210V %Z1.0 → 412A・41kA
   assert.deepStrictEqual(pick({ mode: 'three', kva: 150, v2: 210, z: 1.0 }), ['NF630-CW 500', 'BW630EAG 500']);
   const hi = pick({ mode: 'three', kva: 150, v2: 210, z: 0.5 }); // 82kA
@@ -215,7 +223,7 @@ test('主幹ブレーカー：カタログ転記値で選定', () => {
 
 test('ブレーカー表はフレーム昇順', () => {
   Object.values(C.data.breaker.makers).forEach((m) => {
-    m.list.forEach((b, i) => { if (i > 0) { assert.ok(m.list[i - 1].af <= b.af, b.model); } });
+    [m.list, m.acb].forEach((l) => l.forEach((b, i) => { if (i > 0) { assert.ok(l[i - 1].af <= b.af, b.model); } }));
   });
 });
 

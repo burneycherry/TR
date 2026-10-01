@@ -120,6 +120,7 @@ table.res td strong { font-size: 16px; }
 table.res tr:last-child th, table.res tr:last-child td { border-bottom: none; }
 
 .sub-note { font-size: 12px; color: #5b6878; margin: 8px 0 0; }
+.acb { display: inline-block; margin-top: 6px; font-size: 13px; }
 .sub-h { font-size: 14px; margin: 12px 0 2px; color: #1b2430; }
 .sub-h small { font-size: 11px; font-weight: 400; color: #5b6878; }
 .warn { background: #fff4e5; color: #8a4b00; border-radius: 8px; padding: 8px 10px; font-size: 13px; margin-top: 8px; }

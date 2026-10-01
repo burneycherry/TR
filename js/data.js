@@ -7,7 +7,7 @@
  * verified: true にした項目は画面上の「要確認」バッジが消えます。
  */
 var TR_DATA = {
-  version: '2026-10-01i',
+  version: '2026-10-01j',
 
   // 標準容量 [kVA]（入力候補）
   capacities: {
@@ -230,6 +230,7 @@ var TR_DATA = {
         name: '三菱電機',
         series: 'WS-V / AE-SW',
         source: '三菱 WS-Vシリーズ カタログ Y-0701（25A版）',
+        overNote: '1600AF超の配線用遮断器はカタログ範囲外（ACB を参照）',
         list: [
           { model: 'NF63-CV', af: 63, ratings: [10, 15, 20, 30, 40, 50, 60, 63], icu: [7.5, 2.5] },
           { model: 'NF63-SV', af: 63, ratings: [10, 15, 20, 30, 40, 50, 60, 63], icu: [15, 7.5] },
@@ -252,15 +253,22 @@ var TR_DATA = {
           { model: 'NF800-HEW', af: 800, ratings: [400, 450, 500, 600, 700, 800], icu: [100, 65] },
           { model: 'NF1000-SEW', af: 1000, ratings: [500, 600, 700, 800, 900, 1000], icu: [125, 85] },
           { model: 'NF1250-SEW', af: 1250, ratings: [600, 700, 800, 1000, 1200, 1250], icu: [125, 85] },
-          { model: 'NF1600-SEW', af: 1600, ratings: [800, 1000, 1200, 1400, 1500, 1600], icu: [125, 85] },
-          { model: 'AE2000-SWA (ACB)', af: 2000, ratings: [2000], icu: [65, 65] },
-          { model: 'AE2000-SW (ACB)', af: 2000, ratings: [2000], icu: [85, 85] },
-          { model: 'AE2500-SW (ACB)', af: 2500, ratings: [2500], icu: [85, 85] },
-          { model: 'AE3200-SW (ACB)', af: 3200, ratings: [3200], icu: [85, 85] },
-          { model: 'AE4000-SWA (ACB)', af: 4000, ratings: [4000], icu: [85, 85] },
-          { model: 'AE4000-SW (ACB)', af: 4000, ratings: [4000], icu: [130, 130] },
-          { model: 'AE5000-SW (ACB)', af: 5000, ratings: [5000], icu: [130, 130] },
-          { model: 'AE6300-SW (ACB)', af: 6300, ratings: [6300], icu: [130, 130] }
+          { model: 'NF1600-SEW', af: 1600, ratings: [800, 1000, 1200, 1400, 1500, 1600], icu: [125, 85] }
+        ],
+        // 気中遮断器 AE-SW（Y-0701 仕様一覧、Icu=Ics [AC240V, AC440V]）
+        acb: [
+          { model: 'AE630-SW', af: 630, ratings: [630], icu: [65, 65] },
+          { model: 'AE1000-SW', af: 1000, ratings: [1000], icu: [65, 65] },
+          { model: 'AE1250-SW', af: 1250, ratings: [1250], icu: [65, 65] },
+          { model: 'AE1600-SW', af: 1600, ratings: [1600], icu: [65, 65] },
+          { model: 'AE2000-SWA', af: 2000, ratings: [2000], icu: [65, 65] },
+          { model: 'AE2000-SW', af: 2000, ratings: [2000], icu: [85, 85] },
+          { model: 'AE2500-SW', af: 2500, ratings: [2500], icu: [85, 85] },
+          { model: 'AE3200-SW', af: 3200, ratings: [3200], icu: [85, 85] },
+          { model: 'AE4000-SWA', af: 4000, ratings: [4000], icu: [85, 85] },
+          { model: 'AE4000-SW', af: 4000, ratings: [4000], icu: [130, 130] },
+          { model: 'AE5000-SW', af: 5000, ratings: [5000], icu: [130, 130] },
+          { model: 'AE6300-SW', af: 6300, ratings: [6300], icu: [130, 130] }
         ],
         verified: true
       },
@@ -269,7 +277,7 @@ var TR_DATA = {
       // icu: [240/230V, 440/415V] Icu
       fuji: {
         name: '富士電機',
-        series: 'G-TWIN',
+        series: 'G-TWIN / DH',
         source: '富士 総合カタログ 62D2-J-0030f 3章',
         list: [
           { model: 'BW50EAG', af: 50, ratings: [5, 10, 15, 20, 30, 32, 40, 50], icu: [5, 2.5] },
@@ -305,7 +313,27 @@ var TR_DATA = {
           { model: 'BW2500RAE', af: 2500, ratings: [1200, 1400, 1600, 2000, 2500], icu: [125, 85] },
           { model: 'BW3200RAE', af: 3200, ratings: [1600, 2000, 2500, 2800, 3200], icu: [125, 85] }
         ],
-        overNote: '3200AF超は富士電機のカタログ範囲外（ACB等を個別選定）',
+        // 低圧気中遮断器 DHシリーズ（カタログ 62D1-J-0191c 定格仕様）。定格電流は JIS 値
+        // icu: [JEC AC220V, JIS AC440V] 定格遮断電流。-H/-P は高性能形
+        acb: [
+          { model: 'DH08', af: 800, ratings: [800], icu: [65, 65] },
+          { model: 'DH12', af: 1250, ratings: [1250], icu: [65, 65] },
+          { model: 'DH12-H', af: 1250, ratings: [1250], icu: [80, 80] },
+          { model: 'DH16', af: 1600, ratings: [1600], icu: [65, 65] },
+          { model: 'DH16-H', af: 1600, ratings: [1600], icu: [80, 80] },
+          { model: 'DH16-P', af: 1600, ratings: [1600], icu: [100, 100] },
+          { model: 'DH20', af: 2000, ratings: [2000], icu: [65, 65] },
+          { model: 'DH20-H', af: 2000, ratings: [2000], icu: [80, 80] },
+          { model: 'DH20-P', af: 2000, ratings: [2000], icu: [100, 100] },
+          { model: 'DH25', af: 2500, ratings: [2500], icu: [85, 85] },
+          { model: 'DH25-P', af: 2500, ratings: [2500], icu: [100, 100] },
+          { model: 'DH30', af: 3200, ratings: [3200], icu: [85, 85] },
+          { model: 'DH30-P', af: 3200, ratings: [3200], icu: [100, 100] },
+          { model: 'DH40', af: 4000, ratings: [4000], icu: [100, 100] },
+          { model: 'DH50', af: 5000, ratings: [5000], icu: [120, 120] },
+          { model: 'DH60', af: 6300, ratings: [6300], icu: [120, 120] }
+        ],
+        overNote: '3200AF超の配線用遮断器はカタログ範囲外（ACB を参照）',
         verified: true
       }
     }

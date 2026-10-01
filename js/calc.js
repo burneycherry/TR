@@ -163,21 +163,26 @@
     return null;
   }
 
-  // ブレーカー：定格電流 ≥ need、Icu ≥ 短絡電流 の最小フレーム・最下位グレード
+  // 表（フレーム昇順・同フレームは下位グレード順）から 定格 ≥ need かつ Icu ≥ 短絡電流 の最初の機種
+  function firstFit(list, need, iscKa, col) {
+    for (let i = 0; list && i < list.length; i++) {
+      const b = list[i];
+      const r = pickAtLeast(b.ratings, need);
+      if (r !== null && b.icu[col] >= iscKa) { return { model: b.model, af: b.af, rating: r, icu: b.icu[col] }; }
+    }
+    return null;
+  }
+
+  // ブレーカー：配線用遮断器(MCCB) と 気中遮断器(ACB) をそれぞれ選定
   function selectBreaker(need, iscKa, volt) {
     const col = volt <= 240 ? 0 : 1;
     const makers = {};
     Object.keys(D.breaker.makers).forEach(function (k) {
       const m = D.breaker.makers[k];
-      let hit = null;
-      for (let i = 0; i < m.list.length && !hit; i++) {
-        const b = m.list[i];
-        const r = pickAtLeast(b.ratings, need);
-        if (r !== null && b.icu[col] >= iscKa) {
-          hit = { model: b.model, af: b.af, rating: r, icu: b.icu[col] };
-        }
-      }
-      makers[k] = { name: m.name, series: m.series, pick: hit, overNote: m.overNote || '', verified: m.verified };
+      makers[k] = {
+        name: m.name, series: m.series, pick: firstFit(m.list, need, iscKa, col),
+        acb: firstFit(m.acb, need, iscKa, col), overNote: m.overNote || '', verified: m.verified
+      };
     });
     return { need: need, iscKa: iscKa, voltClass: col === 0 ? 'AC230V級' : 'AC440V級', makers: makers };
   }
@@ -287,7 +292,7 @@
     let design = i2;
     if (brk) {
       Object.keys(brk.makers).forEach(function (k) {
-        const p = brk.makers[k].pick;
+        const p = brk.makers[k].pick || brk.makers[k].acb;
         if (p && p.rating > design) { design = p.rating; }
       });
     }
