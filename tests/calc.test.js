@@ -133,6 +133,7 @@ test('EB：表2.13.2（遮断器定格）の方が太ければ採用', () => {
 
 test('標準容量（日立ラインアップ／単相750・1000追加）', () => {
   assert.deepStrictEqual(C.data.capacities.single.slice(-2), [750, 1000]);
+  assert.deepStrictEqual(C.data.capacities.scott, [10, 20, 30, 50, 75, 100, 150, 200]);
   assert.strictEqual(C.data.capacities.three[0], 20);
   assert.strictEqual(C.data.capacities.three.slice(-1)[0], 2000);
 });
@@ -264,19 +265,20 @@ test('電線・銅バーは設計電流以上', () => {
 });
 
 test('電線規準・銅バー規準の転記値', () => {
-  const byName = (cur) => C.selectCable(cur).map((c) => c.sq + 'x' + c.parallel);
-  // [キュービクル60℃, キュービクル75℃]
-  assert.deepStrictEqual(byName(225), ['100x1', '60x1']);
-  assert.deepStrictEqual(byName(400), ['250x1', '150x1']);
-  assert.deepStrictEqual(byName(100), ['38x1', '22x1']);
-  // 2条：1本 ≥ 電流×0.6。500A → 60℃は 300A以下→150sq×2、75℃は1条200sq
-  assert.deepStrictEqual(byName(500), ['150x2', '200x1']);
-  // 1000A → 60℃は 600A>450A で電線不可（銅バーのみ）、75℃は 600A以下→250sq×2
-  const c1000 = C.selectCable(1000);
-  assert.strictEqual(c1000[0].sq, null);
-  assert.strictEqual(c1000[1].sq + 'x' + c1000[1].parallel, '250x2');
-  // 3条以上にはしない
-  C.selectCable(5000).forEach((c) => assert.strictEqual(c.sq, null));
+  const pick = (cur) => { const c = C.selectCable(cur)[0]; return c.sq === null ? null : c.sq + 'x' + c.parallel; };
+  assert.strictEqual(C.selectCable(100).length, 1); // 75℃ のみ
+  // 最小 5.5sq（3.5sq は使わない）
+  assert.strictEqual(pick(10), '5.5x1');
+  assert.strictEqual(pick(30), '5.5x1');
+  assert.strictEqual(pick(50), '5.5x1');
+  assert.strictEqual(pick(100), '22x1');
+  assert.strictEqual(pick(225), '60x1');
+  assert.strictEqual(pick(400), '150x1');
+  assert.strictEqual(pick(500), '200x1');
+  // 2条：1本 ≥ 電流×0.6。1000A → 600A以下 → 250sq×2
+  assert.strictEqual(pick(1000), '250x2');
+  // 1200A → 720A > 700A → 電線不可（銅バーのみ）
+  assert.strictEqual(pick(1200), null);
   assert.strictEqual(C.selectBusbar(800).size, '10t×50');
   assert.strictEqual(C.selectBusbar(1250).size, '10t×100');
   assert.strictEqual(C.selectBusbar(4000).size, '15t×150×2');
@@ -306,6 +308,7 @@ test('データ表は昇順', () => {
   assert.ok(asc(C.data.ct.primaries));
   C.data.cable.tables.forEach((t) => {
     assert.ok(asc(t.limits)); assert.ok(asc(t.sizes)); assert.strictEqual(t.limits.length, t.sizes.length);
+    assert.ok(t.sizes[0] >= 5.5);
   });
   assert.ok(asc(C.data.busbar.table.map((x) => x[1])));
   const mi = C.data.lbs.makers.mitsubishi;
