@@ -126,7 +126,8 @@
     return { need: need, primary: p, secondary: D.ct.secondary, ratio: p ? p + '/' + D.ct.secondary + 'A' : null };
   }
 
-  // THR 整定値：CT二次換算の定格電流を step 単位で切り捨て
+  // THR 整定値：CT二次換算の定格電流を step 単位で必ず切り捨て
+  // （変圧器が過負荷になる前に警報を出すため。四捨五入・切り上げにしないこと）
   function selectTHR(i2, ctPrimary) {
     if (!ctPrimary) { return null; }
     const raw = i2 * D.ct.secondary / ctPrimary;

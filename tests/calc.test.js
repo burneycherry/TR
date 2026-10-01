@@ -146,6 +146,19 @@ test('ブレーカーは定格・遮断容量を満たす', () => {
   }
 });
 
+test('THR 整定値は常に換算値以下（切り捨て）', () => {
+  for (const mode of ['single', 'three', 'scott']) {
+    for (const kva of [5, 10, 20, 30, 50, 75, 100, 150, 200, 300, 500, 750, 1000, 1500, 2000]) {
+      for (const v2 of [105, 210, 220, 440]) {
+        const r = C.calculate({ mode: mode, kva: kva, v1: 6600, v2: v2 });
+        if (!r.thr) { continue; }
+        assert.ok(r.thr.setting <= r.thr.raw + 1e-9, mode + kva + ':' + r.thr.setting + '>' + r.thr.raw);
+        assert.ok(r.thr.raw - r.thr.setting < 0.1 + 1e-9);
+      }
+    }
+  }
+});
+
 test('電線・銅バーは設計電流以上', () => {
   const r = C.calculate({ phase: 3, kva: 750, v1: 6600, v2: 210 });
   r.conductor.cable.forEach((c) => assert.ok(c.limit * c.parallel >= r.conductor.design, c.name));

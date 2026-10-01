@@ -229,7 +229,7 @@
     if (r.thr) {
       const th = r.thr;
       const tb = '<div class="kv">' + kvItem('整定値', fmt(th.setting, 1), 'A') + kvItem('機種', esc(th.name + ' ' + th.model), '') + '</div>' +
-        '<p class="sub-note">I₂ ' + fmt(r.i2, 1) + 'A × 5 / ' + esc(th.ct.split('/')[0]) + ' = ' + fmt(th.raw, 3) + 'A → ' + D.thr.step + 'A 単位で切り捨て</p>';
+        '<p class="sub-note">I₂ ' + fmt(r.i2, 1) + 'A × 5 / ' + esc(th.ct.split('/')[0]) + ' = ' + fmt(th.raw, 3) + 'A → ' + D.thr.step + 'A 単位で切り捨て（過負荷前に警報を出すため）</p>';
       html += card('二次側 THR（サーマルリレー）' + per, tb, th.verified === false);
       t.push('THR: ' + th.name + ' ' + th.model + ' 整定 ' + fmt(th.setting, 1) + 'A（CT ' + th.ct + '）');
     }
