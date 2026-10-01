@@ -16,11 +16,11 @@
     three4w: [415, 400, 420, 440],
     single: [210, 105, 200, 100, 440, 420],
     scott: [210, 105, 200, 100],
-    todo: [210, 200]
+    todo: [210]
   };
   const V2_LABELS = {
     three4w: { 415: '415/240', 400: '400/230', 420: '420/242', 440: '440/254' },
-    single: { 210: '210 (210/105)' }, scott: { 210: '210 (210/105)' }, todo: { 210: '210 (210/105)', 200: '200 (200/100)' }
+    single: { 210: '210 (210/105)' }, scott: { 210: '210 (210/105)' }, todo: { 210: '210 (210/105)' }
   };
   const MODE_LABEL = { three: '三相', three4w: '三相4線式', single: '単相', scott: 'スコット', todo: '灯動' };
   // 旧保存値（スコット高圧/低圧・低圧/低圧）は スコット に統一
@@ -94,7 +94,7 @@
   function buildKva(keep) {
     const m = calcMode(uiMode());
     const labels = m === 'single' ? { 750: '750（JIS外）', 1000: '1000（JIS外）' } : null;
-    buildVolt(el.kvaSel, el.kva, D.capacities[m === 'todo' ? 'three' : m], keep, labels);
+    buildVolt(el.kvaSel, el.kva, D.capacities[m], keep, labels);
   }
 
   function readInput() {
@@ -104,6 +104,7 @@
       mode: calcMode(m),
       trType: radio('trType') || 'oil',
       mainBreaker: radio('mainBrk') === 'yes',
+      freq: radio('freq') === '60' ? 60 : 50,
       kva: voltValue(el.kvaSel, el.kva),
       v1: voltValue(el.v1, el.v1m),
       v2: voltValue(el.v2, el.v2m),
@@ -161,12 +162,12 @@
     let html = '';
     // 二次側の回路（灯動は 三相回路・単相回路 の2つ）
     const secs = r.todo ? [
-      [r.todo.three, '（三相 ' + fmt(r.input.kva3, 0) + 'kVA）', '[三相] '],
-      [r.todo.single, '（単相 ' + fmt(r.input.kva1, 0) + 'kVA）', '[単相] ']
+      [r.todo.three, '（三相側 ' + fmt(r.input.kva3, 0) + 'kVA）', '[三相] '],
+      [r.todo.single, '（単相側 ' + r.input.kva1 + 'kVA）', '[単相] ']
     ] : [[r, per, '']];
 
     const v2Lbl = (V2_LABELS[inp.uiMode] && V2_LABELS[inp.uiMode][r.input.v2]) || String(r.input.v2);
-    const kvaLbl = r.todo ? '3φ' + r.input.kva3 + 'kVA＋1φ' + r.input.kva1 + 'kVA（計 ' + r.input.kva + 'kVA）' : r.input.kva + 'kVA';
+    const kvaLbl = r.todo ? r.input.kva + 'kVA（三相最大' + r.input.kva3 + '・単相最大' + r.input.kva1 + 'kVA、' + r.input.freq + 'Hz）' : r.input.kva + 'kVA';
     t.push('【変圧器】' + MODE_LABEL[inp.uiMode] + ' ' + (r.input.trType === 'mold' ? 'モールド ' : '油入 ') + kvaLbl + ' ' + r.input.v1 + 'V/' + v2Lbl.split(' ')[0] + 'V');
 
     // 定格電流
@@ -174,7 +175,7 @@
       html += card('定格電流',
         '<div class="kv">' + kvItem('一次電流 I₁', fmt(r.i1, 2), 'A') + kvItem('二次 三相 I₂', fmt(r.todo.three.i2, 1), 'A') +
         kvItem('二次 単相 I₂', fmt(r.todo.single.i2, 1), 'A') + '</div>' +
-        '<p class="sub-note">灯動変圧器：一次は合計 ' + fmt(r.input.kva, 0) + 'kVA の三相、二次は 三相 ' + fmt(r.input.kva3, 0) + 'kVA（' + r.input.v2 + 'V）と 単相3線 ' + fmt(r.input.kva1, 0) + 'kVA（' + r.input.v2 + '/' + (r.input.v2 / 2) + 'V）の2回路</p>');
+        '<p class="sub-note">' + esc(D.todo.name) + '：一次は定格 ' + fmt(r.input.kva, 0) + 'kVA の三相。二次は負荷配分曲線の最大値で、三相側 ' + fmt(r.input.kva3, 0) + 'kVA（' + r.input.v2 + 'V）・単相側 ' + r.input.kva1 + 'kVA（' + r.input.v2 + '-' + (r.input.v2 / 2) + 'V）をそれぞれ選定（曲線の範囲内で電灯・動力を配分）</p>');
       t.push('一次電流: ' + fmt(r.i1, 2) + 'A / 二次電流 三相: ' + fmt(r.todo.three.i2, 1) + 'A・単相: ' + fmt(r.todo.single.i2, 1) + 'A');
     } else {
       html += card('定格電流',
@@ -317,7 +318,7 @@
       const eb = '<div class="kv">' + kvItem('EB 接地線', (e.label ? esc(e.label) : '個別検討') + upLine, '') +
         kvItem('一相分容量', fmt(e.phaseKva, 1), 'kVA') + '</div>' +
         '<p class="sub-note">表2.13.1（' + e.voltClass + '）：' + (e.sq !== null ? e.sq + 'mm²' : '範囲外') + '</p>' + up +
-        '<p class="sub-note">B種接地工事の接地線の太さ（' + e.voltClass + '・銅線）。一相分容量：三相=定格÷3、単相=定格、スコット=定格÷2、灯動=単相分＋三相分÷3。単相3線式は200V級を適用。<br>' + esc(D.eb.note) + '</p>';
+        '<p class="sub-note">B種接地工事の接地線の太さ（' + e.voltClass + '・銅線）。一相分容量：三相=定格÷3、単相=定格、スコット=定格÷2、灯動共用=単相最大（曲線上で単相＋三相÷3 が最大となる点）。単相3線式は200V級を適用。<br>' + esc(D.eb.note) + '</p>';
       html += card('EB（B種接地線）サイズ', eb, e.verified === false);
       t.push('EB: ' + (e.label || '個別検討') + (e.sizeUp.length ? '（ブレーカー ' + e.baseMax + 'A超は表2.13.2でサイズアップ：' + e.sizeUp.map(function (u) { return '〜' + u.to + 'A ' + u.label; }).join('、') + (e.maxByMain ? '・主幹' : '')  + '）' : ''));
     }
@@ -368,12 +369,13 @@
   function update() {
     const inp = readInput();
     const todo = inp.mode === 'todo';
-    el.kva1Field.hidden = !(todo || (inp.mode === 'three' && inp.v1 > 600));
+    el.kva1Field.hidden = !(inp.mode === 'three' && inp.v1 > 600);
     if (el.kva1Field.hidden) { inp.kva1 = null; }
-    $('kvaLabel').textContent = todo ? '三相分 容量 [kVA]' : '容量 [kVA]';
-    $('kva1Label').textContent = todo ? '単相分 容量 [kVA]（単相3線 210/105V）' : 'LBSを共用する単相変圧器 [kVA]（任意・一括選定）';
-    el.kva1.placeholder = todo ? '単相分の容量を入力' : '空欄=三相単独';
-    el.z.placeholder = '標準 ' + C.defaultZ(todo ? 'three' : inp.mode, (inp.kva || 0) + (todo ? (inp.kva1 || 0) : 0), inp.v2) + '%';
+    $('freqField').hidden = !todo;
+    $('kvaLabel').textContent = todo ? '定格容量 [kVA]（日立 灯動共用）' : '容量 [kVA]';
+    const tr = todo ? C.todoRow(inp.kva) : null;
+    $('todoInfo').textContent = tr ? '三相側 最大 ' + tr.kva + 'kVA ／ 単相210-105V 最大 ' + tr.single + 'kVA（負荷配分曲線）、%Z ' + tr.z50 + '%(50Hz)・' + tr.z60 + '%(60Hz)' : '';
+    el.z.placeholder = '標準 ' + (tr ? (inp.freq === 60 ? tr.z60 : tr.z50) : C.defaultZ(todo ? 'three' : inp.mode, inp.kva || 0, inp.v2)) + '%';
     try {
       const r = C.calculate(inp);
       el.err.textContent = '';
@@ -384,7 +386,7 @@
       lastText = '';
     }
     save({
-      uiMode: inp.uiMode, trType: inp.trType, mainBreaker: inp.mainBreaker, kva: el.kvaSel.value === MANUAL ? (el.kva.value || MANUAL) : el.kvaSel.value,
+      uiMode: inp.uiMode, trType: inp.trType, mainBreaker: inp.mainBreaker, freq: inp.freq, kva: el.kvaSel.value === MANUAL ? (el.kva.value || MANUAL) : el.kvaSel.value,
       v1: el.v1.value === MANUAL ? (el.v1m.value || MANUAL) : el.v1.value,
       v2: el.v2.value === MANUAL ? (el.v2m.value || MANUAL) : el.v2.value,
       z: el.z.value, isc: el.isc.value, kva1: el.kva1.value
@@ -423,6 +425,7 @@
       setRadio('mode', normUiMode(s.uiMode));
       setRadio('trType', s.trType === 'mold' ? 'mold' : 'oil');
       setRadio('mainBrk', s.mainBreaker ? 'yes' : 'no');
+      setRadio('freq', s.freq === 60 ? '60' : '50');
       el.z.value = s.z || '';
       el.isc.value = s.isc || '';
       el.kva1.value = s.kva1 || '';
@@ -433,7 +436,7 @@
     Array.prototype.forEach.call(document.querySelectorAll('input[name="mode"]'), function (r) {
       r.addEventListener('change', function () { buildVolts(null, voltValue(el.v2, el.v2m)); buildKva(voltValue(el.kvaSel, el.kva)); update(); });
     });
-    Array.prototype.forEach.call(document.querySelectorAll('input[name="trType"], input[name="mainBrk"]'), function (r) {
+    Array.prototype.forEach.call(document.querySelectorAll('input[name="trType"], input[name="mainBrk"], input[name="freq"]'), function (r) {
       r.addEventListener('change', update);
     });
     [el.kva, el.z, el.isc, el.kva1, el.v1m, el.v2m].forEach(function (i) { i.addEventListener('input', update); });
@@ -451,7 +454,7 @@
     });
     $('resetBtn').addEventListener('click', function () {
       try { localStorage.removeItem(STORE_KEY); } catch (e) { /* noop */ }
-      setRadio('mode', 'three'); setRadio('trType', 'oil'); setRadio('mainBrk', 'no');
+      setRadio('mode', 'three'); setRadio('trType', 'oil'); setRadio('mainBrk', 'no'); setRadio('freq', '50');
       el.kva.value = ''; el.z.value = ''; el.isc.value = ''; el.kva1.value = '';
       el.v1m.value = ''; el.v2m.value = '';
       buildVolts(null, 210); buildKva(300); update();

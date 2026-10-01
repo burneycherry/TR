@@ -280,28 +280,42 @@
    * input: { mode: 'single'|'three'|'scott'（旧: phase 1|3）, kva, v1, v2,
    *          z, iscKa, trType: 'oil'|'mold', kva1（三相と一括でLBSを共用する単相kVA）,
    *          mainBreaker: true で二次主幹ブレーカーも選定（既定は不要） }
-   * mode 'todo'（灯動変圧器）：kva=三相分、kva1=単相分。'three4w' は 'three' と同じ計算（二次は線間電圧）
+   * mode 'todo'（灯動共用変圧器）：kva=定格容量（日立 70〜150kVA）、freq=50|60（%Z 選択）。'three4w' は 'three' と同じ計算（二次は線間電圧）
    */
-  // 灯動変圧器：一次（LBS・一次電流）は合計容量の三相変圧器として、
-  // 二次は 三相回路（kva）と 単相3線回路（kva1）をそれぞれ選定。EB は 単相＋三相÷3（ユーザー指定）
-  function calculateTodo(input) {
-    const k3 = Number(input.kva);
-    const k1 = Number(input.kva1);
-    if (!(k3 > 0) || !(k1 > 0)) {
-      throw new Error('灯動変圧器は三相分・単相分の容量を入力してください。');
+  // 灯動共用変圧器（日立 区分①〜⑤）：定格容量の行を返す
+  function todoRow(kva) {
+    const rows = D.todo.rows;
+    for (let i = 0; i < rows.length; i++) {
+      if (rows[i][0] === kva) { return { kva: rows[i][0], single: rows[i][1], z50: rows[i][2], z60: rows[i][3] }; }
     }
-    const base = calculate(Object.assign({}, input, { mode: 'three', kva: k3 + k1, kva1: 0 }));
-    // %Z は合計容量の値（入力値または標準値）を各回路に使う
-    const sub = Object.assign({}, input, { z: base.z.tr, kva1: 0 });
-    const c3 = calculate(Object.assign({}, sub, { mode: 'three', kva: k3 }));
-    const c1 = calculate(Object.assign({}, sub, { mode: 'single', kva: k1 }));
+    return null;
+  }
+
+  // 灯動共用変圧器：一次（LBS・一次電流）は定格容量の三相変圧器として、
+  // 二次は 三相側＝定格容量・単相側＝単相最大（負荷配分曲線）でそれぞれ選定（ユーザー指定）
+  // %Z は日立特性表（周波数別）。EB の一相分容量＝単相最大（曲線上で 単相＋三相÷3 が最大となる点）
+  function calculateTodo(input) {
+    const k = Number(input.kva);
+    const row = todoRow(k);
+    if (!row) {
+      throw new Error('灯動変圧器は定格容量 ' + D.todo.rows.map(function (x) { return x[0]; }).join('/') + 'kVA から選んでください。');
+    }
+    const freq = Number(input.freq) === 60 ? 60 : 50;
+    const zIn = Number(input.z) > 0 ? Number(input.z) : 0;
+    const z = zIn || (freq === 60 ? row.z60 : row.z50);
+    const base = calculate(Object.assign({}, input, { mode: 'three', kva: k, kva1: 0, z: z }));
+    base.z.trIsDefault = !zIn;
+    const sub = Object.assign({}, input, { z: z, kva1: 0 });
+    const c3 = calculate(Object.assign({}, sub, { mode: 'three', kva: k }));
+    const c1 = calculate(Object.assign({}, sub, { mode: 'single', kva: row.single }));
+    [c3, c1].forEach(function (c) { c.z.trIsDefault = !zIn; });
     const maxA = Math.max(c3.eb.maxA, c1.eb.maxA);
-    const eb = Object.assign(selectEB('single', k1 + k3 / 3, base.input.v2, maxA),
+    const eb = Object.assign(selectEB('single', row.single, base.input.v2, maxA),
       { maxA: maxA, maxByMain: c3.eb.maxByMain, i2: c3.eb.maxA >= c1.eb.maxA ? c3.i2 : c1.i2, todo: true });
-    if (base.fuse) { base.fuse.warn.push('灯動変圧器：一次側は合計 ' + (k3 + k1) + 'kVA の三相変圧器として選定しています。'); }
+    if (base.fuse) { base.fuse.warn.push('灯動共用変圧器：一次側は定格容量 ' + k + 'kVA の三相変圧器として選定しています。'); }
     return Object.assign(base, {
-      input: Object.assign({}, base.input, { mode: 'todo', kva3: k3, kva1: k1 }),
-      todo: { three: c3, single: c1 },
+      input: Object.assign({}, base.input, { mode: 'todo', kva3: k, kva1: row.single, freq: freq }),
+      todo: { three: c3, single: c1, row: row, freq: freq },
       eb: eb
     });
   }
@@ -366,7 +380,7 @@
 
   const api = {
     calculate: calculate, ratedCurrent: ratedCurrent, defaultZ: defaultZ, sourceZ: sourceZ,
-    pickAtLeast: pickAtLeast, selectCable: selectCable, selectBusbar: selectBusbar,
+    pickAtLeast: pickAtLeast, todoRow: todoRow, selectCable: selectCable, selectBusbar: selectBusbar,
     selectBreaker: selectBreaker, selectBranch: selectBranch, selectCT: selectCT, selectTHR: selectTHR, selectFuse: selectFuse,
     selectEB: selectEB, data: D
   };

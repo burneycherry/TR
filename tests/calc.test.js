@@ -380,20 +380,23 @@ test('三相4線式は三相と同じ計算（二次は線間電圧）', () => {
   assert.strictEqual(a.eb.label, b.eb.label);
 });
 
-test('灯動変圧器：一次は合計容量の三相、二次は三相回路と単相回路、EBは単相＋三相÷3', () => {
-  const r = C.calculate({ mode: 'todo', kva: 75, kva1: 25, v1: 6600, v2: 210 });
+test('灯動共用（日立）：一次は定格容量の三相、二次は三相側＝定格・単相側＝単相最大、%Zは周波数別', () => {
+  const r = C.calculate({ mode: 'todo', kva: 100, v1: 6600, v2: 210, freq: 50 });
   const t = C.calculate({ mode: 'three', kva: 100, v1: 6600, v2: 210 });
   near(r.i1, t.i1, 1e-9);
-  assert.strictEqual(r.fuse.mitsubishi.min, t.fuse.mitsubishi.min); // LBS は合計 100kVA の三相で選定
+  assert.strictEqual(r.fuse.mitsubishi.min, t.fuse.mitsubishi.min); // LBS は定格 100kVA の三相
   assert.strictEqual(r.fuse.fuji.value, t.fuse.fuji.value);
-  near(r.todo.three.i2, 75000 / (Math.sqrt(3) * 210), 1e-9);
-  near(r.todo.single.i2, 25000 / 210, 1e-9);
-  assert.strictEqual(r.todo.three.ct.ratio, '300/5A'); // 206.2×1.25=257.7
-  assert.strictEqual(r.todo.single.ct.ratio, '150/5A'); // 119.0×1.25=148.8
-  near(r.eb.phaseKva, 25 + 75 / 3, 1e-9); // 50kVA・200V級 → 22mm²
+  assert.strictEqual(r.z.tr, 2.45); // ③ 50Hz
+  assert.strictEqual(C.calculate({ mode: 'todo', kva: 100, v1: 6600, v2: 210, freq: 60 }).z.tr, 2.88);
+  assert.strictEqual(r.todo.single.input.kva, 75); // ③ 単相最大 75kVA
+  near(r.todo.three.i2, 100000 / (Math.sqrt(3) * 210), 1e-9);
+  near(r.todo.single.i2, 75000 / 210, 1e-9);
+  assert.strictEqual(r.todo.three.ct.ratio, '400/5A'); // 274.9×1.25=343.7
+  assert.strictEqual(r.todo.single.ct.ratio, '500/5A'); // 357.1×1.25=446.4
+  assert.strictEqual(r.eb.phaseKva, 75); // 単相最大・200V級 75kVA以下 → 22mm²
   assert.strictEqual(r.eb.label, '22mm²');
-  assert.strictEqual(r.todo.three.z.tr, r.z.tr); // %Z は合計容量の値
-  assert.throws(() => C.calculate({ mode: 'todo', kva: 75, v1: 6600, v2: 210 }));
+  assert.deepStrictEqual(C.data.todo.rows.map((x) => x[1]), [45, 55, 75, 87.5, 100]);
+  assert.throws(() => C.calculate({ mode: 'todo', kva: 90, v1: 6600, v2: 210 })); // 標準外
 });
 
 test('スコットは一次電圧で高圧/低圧を判定', () => {
