@@ -25,6 +25,7 @@ description: js/data.js の選定テーブル（LBSヒューズ・MCCB/ACB の�
 | `cable.tables[]` | `{group, temp, name, basis, limits[], sizes[]}`（60℃ IV・FP と 75℃ の2表。A以下→sq、昇順・同数、最小5.5sq）、`maxParallel:2`、`parallelRatio:0.6` |
 | `busCable.tables[]` | 母線電線の許容電流表（IV・FP 60℃・HIV・EM-IE・EM-LMFC 75℃）。形式は `cable.tables` と同じ |
 | `todo.rows` | `[定格kVA, 単相最大kVA, %Z 50Hz, %Z 60Hz]`（日立 灯動共用 特性表・負荷配分曲線） |
+| `todo.curves[kVA]` | 負荷配分曲線の折れ点 `[三相kVA, 単相kVA]`（三相0→定格の順） |
 | `busbar.table` | `[表示名, 許容A]`（許容電流の昇順） |
 
 3. 確認済みテーブルは `verified: true`、`version` を当日の日付（同日複数回は末尾に英字）に。

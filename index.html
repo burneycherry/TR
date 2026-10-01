@@ -58,6 +58,13 @@
         <label><input type="radio" name="freq" value="60"><span>60Hz</span></label>
       </div>
       <p class="sub-note" id="todoInfo"></p>
+      <span class="label" style="margin-top:12px">負荷配分（入力する側を選択、もう一方は負荷配分曲線から算出）</span>
+      <div class="seg" role="radiogroup">
+        <label><input type="radio" name="todoSide" value="three" checked><span>三相側を入力</span></label>
+        <label><input type="radio" name="todoSide" value="single"><span>単相側を入力</span></label>
+      </div>
+      <input id="todoLoad" type="number" inputmode="decimal" min="0" step="any" placeholder="空欄=折れ点" style="margin-top:8px">
+      <p class="sub-note" id="todoSplit"></p>
     </div>
 
     <div class="field" id="kva1Field">
@@ -116,7 +123,7 @@
       <li>短絡電流は %Z のみ（R/X 分離なし）の簡易計算です。電源側は一次側短絡電流を入力した場合のみ考慮します。</li>
       <li>単相3線式の105V側短絡電流は210V側の値と異なります。</li>
       <li>スコット変圧器の二次側は M座・T座 各 容量/2 の単相回路として計算し、同じ機器を2回路分選定します。</li>
-      <li>三相4線式は線間電圧で三相と同じ計算です。灯動共用変圧器（日立 SuperトップランナーⅢ 70〜150kVA）は一次・LBSヒューズを定格容量の三相変圧器として選定し、二次は三相側（定格容量）と単相側（負荷配分曲線の単相最大）をそれぞれ選定します。%Zは日立特性表の周波数別の値、短絡電流は簡易計算です。EBの一相分容量は単相最大としています。</li>
+      <li>三相4線式は線間電圧で三相と同じ計算です。灯動共用変圧器（日立 SuperトップランナーⅢ 70〜150kVA）は一次・LBSヒューズを定格容量の三相変圧器として選定し、二次は負荷配分曲線上の配分（三相側か単相側の一方を入力、空欄は曲線の折れ点）で三相側・単相側をそれぞれ選定します。曲線は日立のグラフからの読取値です。%Zは日立特性表の周波数別の値、短絡電流は簡易計算です。EBの一相分容量は単相分＋三相分÷3としています。</li>
       <li>LBSヒューズは三菱 表5(1)/5(2)、富士 JCシリーズ標準選定表（カタログ転記）によります。表にない容量は直近上位容量の行で選定します。</li>
       <li>変圧器二次側母線（電線・銅バー）は主幹ブレーカーありの場合はその定格以上、なしの場合は二次定格電流以上で選定しています。母線の電線は社内規準の許容電流表（IV・FP 60℃・HIV・EM-IE・EM-LMFC 75℃）によります。電線は最小5.5sq、2条引きまで（JSIA：1本の許容電流は回路電流の60%以上）とし、超える場合は銅バーのみです。EBは内線規程 表2.13.1によります（分岐・主幹ブレーカーのサイズによっては表2.13.2 によりサイズアップ。目安を併記）。電圧降下・布設条件の低減は別途検討してください。</li>
     </ul>

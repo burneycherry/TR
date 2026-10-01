@@ -291,9 +291,39 @@
     return null;
   }
 
+  // 負荷配分曲線：side='three' なら三相kVA→単相kVA、'single' なら単相kVA→三相kVA（折れ線を線形補間）
+  function todoSplit(kva, side, value) {
+    const c = D.todo.curves[kva];
+    if (!c) { return null; }
+    const knee = c[1];
+    const xi = side === 'single' ? 1 : 0;
+    const yi = 1 - xi;
+    const max = side === 'single' ? c[0][1] : c[c.length - 1][0];
+    // 未入力は折れ点（バランス点）
+    let v = value === null || value === undefined || value === '' ? knee[xi] : Number(value);
+    if (!(v >= 0)) { v = knee[xi]; }
+    if (v > max) { return { error: (side === 'single' ? '単相' : '三相') + '側は最大 ' + max + 'kVA です。' }; }
+    // 単相基準は曲線を逆にたどる（x=単相 の昇順に並べ替え）
+    const pts = side === 'single' ? c.slice().reverse() : c;
+    for (let i = 1; i < pts.length; i++) {
+      const a = pts[i - 1];
+      const b = pts[i];
+      if (v <= b[xi]) {
+        const y = a[yi] + (b[yi] - a[yi]) * (v - a[xi]) / (b[xi] - a[xi]);
+        const r = side === 'single' ? { three: y, single: v } : { three: v, single: y };
+        r.three = Math.round(r.three * 10) / 10;
+        r.single = Math.round(r.single * 10) / 10;
+        r.side = side;
+        r.knee = knee;
+        return r;
+      }
+    }
+    return null;
+  }
+
   // 灯動共用変圧器：一次（LBS・一次電流）は定格容量の三相変圧器として、
-  // 二次は 三相側＝定格容量・単相側＝単相最大（負荷配分曲線）でそれぞれ選定（ユーザー指定）
-  // %Z は日立特性表（周波数別）。EB の一相分容量＝単相最大（曲線上で 単相＋三相÷3 が最大となる点）
+  // 二次は負荷配分曲線上の配分（三相側／単相側の一方を入力、未入力は折れ点）で各回路を選定（ユーザー指定）
+  // %Z は日立特性表（周波数別）。EB の一相分容量＝単相＋三相÷3
   function calculateTodo(input) {
     const k = Number(input.kva);
     const row = todoRow(k);
@@ -301,21 +331,28 @@
       throw new Error('灯動変圧器は定格容量 ' + D.todo.rows.map(function (x) { return x[0]; }).join('/') + 'kVA から選んでください。');
     }
     const freq = Number(input.freq) === 60 ? 60 : 50;
+    // 負荷配分：三相側／単相側のどちらかを入力し、もう一方を負荷配分曲線から求める
+    const split = todoSplit(k, input.todoSide === 'single' ? 'single' : 'three', input.todoLoad);
+    if (!split || split.error) { throw new Error(split ? split.error : '負荷配分曲線がありません。'); }
     const zIn = Number(input.z) > 0 ? Number(input.z) : 0;
     const z = zIn || (freq === 60 ? row.z60 : row.z50);
     const base = calculate(Object.assign({}, input, { mode: 'three', kva: k, kva1: 0, z: z }));
     base.z.trIsDefault = !zIn;
     const sub = Object.assign({}, input, { z: z, kva1: 0 });
-    const c3 = calculate(Object.assign({}, sub, { mode: 'three', kva: k }));
-    const c1 = calculate(Object.assign({}, sub, { mode: 'single', kva: row.single }));
+    if (!(split.three > 0) || !(split.single > 0)) {
+      throw new Error('三相側・単相側とも 0 より大きい配分にしてください（片側のみの場合は三相・単相を選択）。');
+    }
+    const c3 = calculate(Object.assign({}, sub, { mode: 'three', kva: split.three }));
+    const c1 = calculate(Object.assign({}, sub, { mode: 'single', kva: split.single }));
     [c3, c1].forEach(function (c) { c.z.trIsDefault = !zIn; });
     const maxA = Math.max(c3.eb.maxA, c1.eb.maxA);
-    const eb = Object.assign(selectEB('single', row.single, base.input.v2, maxA),
+    // EB：一相分容量＝単相＋三相÷3（単相側中性点を接地する巻線の負担。ユーザー指定）
+    const eb = Object.assign(selectEB('single', split.single + split.three / 3, base.input.v2, maxA),
       { maxA: maxA, maxByMain: c3.eb.maxByMain, i2: c3.eb.maxA >= c1.eb.maxA ? c3.i2 : c1.i2, todo: true });
     if (base.fuse) { base.fuse.warn.push('灯動共用変圧器：一次側は定格容量 ' + k + 'kVA の三相変圧器として選定しています。'); }
     return Object.assign(base, {
-      input: Object.assign({}, base.input, { mode: 'todo', kva3: k, kva1: row.single, freq: freq }),
-      todo: { three: c3, single: c1, row: row, freq: freq },
+      input: Object.assign({}, base.input, { mode: 'todo', kva3: split.three, kva1: split.single, freq: freq }),
+      todo: { three: c3, single: c1, row: row, freq: freq, split: split },
       eb: eb
     });
   }
@@ -380,7 +417,7 @@
 
   const api = {
     calculate: calculate, ratedCurrent: ratedCurrent, defaultZ: defaultZ, sourceZ: sourceZ,
-    pickAtLeast: pickAtLeast, todoRow: todoRow, selectCable: selectCable, selectBusbar: selectBusbar,
+    pickAtLeast: pickAtLeast, todoRow: todoRow, todoSplit: todoSplit, selectCable: selectCable, selectBusbar: selectBusbar,
     selectBreaker: selectBreaker, selectBranch: selectBranch, selectCT: selectCT, selectTHR: selectTHR, selectFuse: selectFuse,
     selectEB: selectEB, data: D
   };
