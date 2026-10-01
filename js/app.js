@@ -484,7 +484,7 @@
 
     if ('serviceWorker' in navigator) {
       window.addEventListener('load', function () {
-        navigator.serviceWorker.register('sw.js').catch(function () { /* オフライン非対応でも動作 */ });
+        navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' }).catch(function () { /* オフライン非対応でも動作 */ });
       });
     }
   }
