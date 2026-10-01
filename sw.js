@@ -1,5 +1,5 @@
 /* Service Worker：ネットワーク優先・失敗時キャッシュ（更新が即反映され、オフラインでも動く） */
-const CACHE = 'tr-select-v2';
+const CACHE = 'tr-select-v3';
 const ASSETS = [
   './',
   './index.html',

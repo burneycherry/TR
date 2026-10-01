@@ -250,21 +250,26 @@
     // 電線・銅バー
     const cd = r.conductor;
     let cb = '<p class="sub-note" style="margin-top:0">設計電流 ' + fmt(cd.design, 0) + 'A（主幹ブレーカー定格以上）</p><table class="res">';
-    const cab = cd.cable;
-    const cabTxt = cab ? D.cable.name + ' ' + cab.sq + 'sq' + (cab.parallel > 1 ? ' × ' + cab.parallel + '条' : '') : '該当なし（銅バー推奨）';
-    cb += row('電線', '<strong>' + esc(cabTxt) + '</strong>' + (cab ? '<br>' + note('許容 ' + cab.ampacity + 'A' + (cab.parallel > 1 ? ' × ' + cab.parallel + ' = ' + cab.total + 'A' : '')) : ''));
+    const cabTxts = [];
+    cd.cable.forEach(function (c) {
+      const txt = c.sq ? c.sq + 'sq' + (c.parallel > 1 ? ' × ' + c.parallel + '条' : '') : '該当なし（銅バー推奨）';
+      const sub = c.sq ? c.name + '　' + c.basis + ' ' + c.limit + 'A以下' + (c.parallel > 1 ? ' × ' + c.parallel : '') : c.name;
+      cb += row(esc(c.group) + '<br>' + esc(c.temp), '<strong>' + esc(txt) + '</strong><br>' + note(esc(sub)));
+      cabTxts.push(c.group + c.temp + ' ' + txt);
+    });
     const bus = cd.busbar;
     cb += row('銅バー', '<strong>' + (bus ? esc(bus.size) : '該当なし（個別設計）') + '</strong>' + (bus ? '<br>' + note('許容 ' + bus.ampacity + 'A') : ''));
     cb += '</table><p class="sub-note">' + esc(D.cable.note) + '<br>' + esc(D.busbar.note) + '</p>';
     html += card('二次側 電線・銅バー' + per, cb, !(D.cable.verified && D.busbar.verified));
-    t.push('電線: ' + cabTxt + ' / 銅バー: ' + (bus ? bus.size : '該当なし'));
+    t.push('電線: ' + cabTxts.join(' / '));
+    t.push('銅バー: ' + (bus ? bus.size : '該当なし'));
 
     // EB（B種接地線）
     if (r.eb) {
       const e = r.eb;
       const eb = '<div class="kv">' + kvItem('EB 接地線', e.sq ? e.sq : '個別検討', e.sq ? 'mm²' : '') +
         kvItem('一相分容量', fmt(e.phaseKva, 1), 'kVA') + '</div>' +
-        '<p class="sub-note">B種接地工事の接地線の太さ（' + e.voltClass + '・銅線）。一相分容量：三相=定格÷3、単相=定格、スコット=定格÷2。単相3線式は200V級を適用。</p>';
+        '<p class="sub-note">B種接地工事の接地線の太さ（' + e.voltClass + '・銅線）。一相分容量：三相=定格÷3、単相=定格、スコット=定格÷2。単相3線式は200V級を適用。<br>' + esc(D.eb.note) + '</p>';
       html += card('EB（B種接地線）サイズ', eb, e.verified === false);
       t.push('EB: ' + (e.sq ? e.sq + 'mm²' : '個別検討'));
     } else {

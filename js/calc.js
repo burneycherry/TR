@@ -145,16 +145,18 @@
     return { setting: setting, makers: makers };
   }
 
+  // 電線規準の各表で選定。単条で収まらなければ並列条数を増やす
   function selectCable(current) {
-    const t = D.cable.table;
-    for (let n = 1; n <= D.cable.maxParallel; n++) {
-      for (let i = 0; i < t.length; i++) {
-        if (t[i][1] * n >= current) {
-          return { sq: t[i][0], ampacity: t[i][1], parallel: n, total: t[i][1] * n };
+    return D.cable.tables.map(function (t) {
+      for (let n = 1; n <= D.cable.maxParallel; n++) {
+        for (let i = 0; i < t.limits.length; i++) {
+          if (t.limits[i] * n >= current) {
+            return { group: t.group, temp: t.temp, name: t.name, basis: t.basis, sq: t.sizes[i], limit: t.limits[i], parallel: n };
+          }
         }
       }
-    }
-    return null;
+      return { group: t.group, temp: t.temp, name: t.name, basis: t.basis, sq: null };
+    });
   }
 
   function selectBusbar(current) {

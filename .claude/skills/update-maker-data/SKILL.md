@@ -13,7 +13,7 @@ description: js/data.js のメーカー選定テーブル（限流ヒューズ�
    - THR：`thr.makers.<maker>.heaters` = `[呼び, 最小, 最大]`。
    - ブレーカー：`breaker.makers.<maker>.list` は **小フレーム→下位グレードの順**。`icu: [230V級, 440V級]`。
    - EB：`eb.table` = `[100V級, 200V級, 400V級 の一相分kVA以下, mm²]`。
-   - 電線：`cable.table` = `[sq, A]` 昇順。銅バー：`busbar.table` = `[表示名, A]` 許容電流の昇順。
+   - 電線：`cable.tables[]` = `{group, temp, name, basis, limits[], sizes[]}`（limits A以下 → sizes sq以上、両方昇順・同数）。銅バー：`busbar.table` = `[表示名, A]` 許容電流の昇順。
 3. 確認済みのテーブルは `verified: true`、`version` を当日の日付に。
 4. `npm run check && npm test` を実行し全て pass させる。
 5. `sw.js` の `CACHE` 名を上げる（例 `tr-select-v2`）。

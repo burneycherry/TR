@@ -144,8 +144,21 @@ test('ブレーカーは定格・遮断容量を満たす', () => {
 
 test('電線・銅バーは設計電流以上', () => {
   const r = C.calculate({ phase: 3, kva: 750, v1: 6600, v2: 210 });
-  assert.ok(r.conductor.cable.total >= r.conductor.design);
+  r.conductor.cable.forEach((c) => assert.ok(c.limit * c.parallel >= r.conductor.design, c.name));
   assert.ok(r.conductor.busbar.ampacity >= r.conductor.design);
+});
+
+test('電線規準・銅バー規準の転記値', () => {
+  const byName = (cur) => C.selectCable(cur).map((c) => c.sq + 'x' + c.parallel);
+  // [キュービクル60℃, キュービクル75℃, 盤類60℃, 盤類75℃]
+  assert.deepStrictEqual(byName(225), ['100x1', '60x1', '150x1', '100x1']);
+  assert.deepStrictEqual(byName(400), ['250x1', '150x1', '250x1', '150x1']);
+  assert.deepStrictEqual(byName(100), ['38x1', '22x1', '38x1', '22x1']);
+  assert.deepStrictEqual(byName(1000), ['200x3', '200x2', '200x3', '250x2']);
+  assert.strictEqual(C.selectBusbar(800).size, '10t×50');
+  assert.strictEqual(C.selectBusbar(1250).size, '10t×100');
+  assert.strictEqual(C.selectBusbar(4000).size, '15t×150×2');
+  assert.strictEqual(C.selectBusbar(5000), null);
 });
 
 test('全標準容量で例外なく計算できる', () => {
@@ -169,7 +182,9 @@ test('不正入力はエラー', () => {
 test('データ表は昇順', () => {
   const asc = (a) => a.every((v, i) => i === 0 || a[i - 1] < v);
   assert.ok(asc(C.data.ct.primaries));
-  assert.ok(asc(C.data.cable.table.map((x) => x[1])));
+  C.data.cable.tables.forEach((t) => {
+    assert.ok(asc(t.limits)); assert.ok(asc(t.sizes)); assert.strictEqual(t.limits.length, t.sizes.length);
+  });
   assert.ok(asc(C.data.busbar.table.map((x) => x[1])));
   const mi = C.data.lbs.makers.mitsubishi;
   [mi.single[3300], mi.single[6600], mi.three[3300], mi.three[6600]].forEach((t) => assert.ok(asc(t.map((x) => x[0]))));
