@@ -222,9 +222,7 @@
         const ratings = pickB.ratings.filter(function (r) { return r <= max; });
         rows.push({
           af: f.af, model: pickB.model, icu: pickB.icu[col], ok: !!hit,
-          minRating: ratings[0], maxRating: ratings[ratings.length - 1],
-          // 母線銅バー → 分岐ブレーカー一次側の電線（フレーム最大定格の遮断器容量基準）
-          cable: selectCable(ratings[ratings.length - 1])
+          minRating: ratings[0], maxRating: ratings[ratings.length - 1]
         });
         if (ratings[ratings.length - 1] >= i2) { break; }
       }

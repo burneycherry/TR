@@ -271,7 +271,7 @@
     // 分岐ブレーカー（フレーム別）
     const br = r.branch;
     let brb = '<p class="sub-note" style="margin-top:0">条件: ' + br.voltClass + ' Icu ≥ ' + fmt(r.iscKa, 2) + 'kA' + (r.input.mode === 'three' ? '' : '（2P）') +
-      '。二次定格電流 ' + fmt(r.i2, 1) + 'A を流せるフレームまで表示。配線は母線銅バー〜分岐ブレーカー一次側（キュービクル表・フレーム最大定格の遮断器容量基準、IV・FP 60℃／HIV・WL1・EM-IE 75℃）</p>';
+      '。二次定格電流 ' + fmt(r.i2, 1) + 'A を流せるフレームまで表示</p>';
     Object.keys(br.makers).forEach(function (k) {
       const m = br.makers[k];
       brb += '<h3 class="sub-h">' + esc(m.name) + '　<small>' + esc(m.series) + '</small></h3><table class="res">';
@@ -280,11 +280,8 @@
         const range = x.minRating === x.maxRating ? x.maxRating + 'A' : x.minRating + '〜' + x.maxRating + 'A';
         const val = x.ok ? '<strong>' + esc(x.model) + '</strong><br>' + note('Icu ' + x.icu + 'kA　定格 ' + range)
           : '<strong>該当なし</strong><br>' + note('最大 ' + esc(x.model) + ' Icu ' + x.icu + 'kA で不足（カスケード等を検討）');
-        const wires = x.cable.map(function (c) {
-          return c.temp + ' ' + (c.sq ? c.sq + 'sq' + (c.parallel > 1 ? '×' + c.parallel + '条' : '') : '銅バー');
-        });
-        brb += row(x.af + 'AF', val + '<br>' + note('配線 ' + esc(wires.join('／'))));
-        tx.push(x.af + 'AF ' + (x.ok ? x.model : '該当なし') + '（配線 ' + wires.join('/') + '）');
+        brb += row(x.af + 'AF', val);
+        tx.push(x.af + 'AF ' + (x.ok ? x.model : '該当なし'));
       });
       brb += '</table>';
       t.push('分岐(' + m.name + '): ' + tx.join(' / '));
