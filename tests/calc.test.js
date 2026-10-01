@@ -174,8 +174,12 @@ test('主幹ブレーカー：カタログ転記値で選定', () => {
   assert.deepStrictEqual(pick({ mode: 'single', kva: 100, v2: 210 }), ['NF630-CW 500', 'BW630EAG 500']);
   // 三相500kVA 440V：656A・18.7kA(440V級)
   assert.deepStrictEqual(pick({ mode: 'three', kva: 500, v2: 440 }), ['NF800-CEW 700', 'BW800EAG 700']);
-  // 三相300kVA 210V：824.8A → 富士は800AF超でカタログ範囲外
-  assert.deepStrictEqual(pick({ mode: 'three', kva: 300, v2: 210 }), ['NF1000-SEW 900', null]);
+  // 三相300kVA 210V：824.8A → 1000AF
+  assert.deepStrictEqual(pick({ mode: 'three', kva: 300, v2: 210 }), ['NF1000-SEW 900', 'BW1000RAE 900']);
+  // 三相1000kVA 210V：2749A → 3200AF
+  assert.deepStrictEqual(pick({ mode: 'three', kva: 1000, v2: 210 }), ['AE3200-SW (ACB) 3200', 'BW3200RAE 2800']);
+  // 三相2000kVA 210V：5499A → 富士は範囲外
+  assert.strictEqual(pick({ mode: 'three', kva: 2000, v2: 210 })[1], null);
   // 遮断容量で上位グレードへ：三相150kVA 210V %Z1.0 → 412A・41kA
   assert.deepStrictEqual(pick({ mode: 'three', kva: 150, v2: 210, z: 1.0 }), ['NF630-CW 500', 'BW630EAG 500']);
   const hi = pick({ mode: 'three', kva: 150, v2: 210, z: 0.5 }); // 82kA
