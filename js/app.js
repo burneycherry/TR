@@ -10,15 +10,21 @@
   // 電源相モードごとの電圧候補
   const HV1 = [6600, 3300, 22000];
   const LV1 = [440, 420, 415, 400, 220, 210, 200];
-  const V1_OPTIONS = { three: HV1.concat(LV1), single: HV1.concat(LV1), 'scott-hv': HV1, 'scott-lv': [440, 420, 415, 400, 210, 200] };
+  const V1_OPTIONS = { three: HV1.concat(LV1), three4w: HV1.concat(LV1), single: HV1.concat(LV1), scott: HV1.concat(LV1), todo: HV1.concat(LV1) };
   const V2_OPTIONS = {
     three: [210, 200, 220, 400, 415, 420, 440],
+    three4w: [415, 400, 420, 440],
     single: [210, 105, 200, 100, 440, 420],
-    'scott-hv': [210, 105, 200, 100],
-    'scott-lv': [210, 105, 200, 100]
+    scott: [210, 105, 200, 100],
+    todo: [210, 200]
   };
-  const V2_LABEL = { 210: '210 (210/105)' };
-  const MODE_LABEL = { three: '三相', single: '単相', 'scott-hv': 'スコット(高圧/低圧)', 'scott-lv': 'スコット(低圧/低圧)' };
+  const V2_LABELS = {
+    three4w: { 415: '415/240', 400: '400/230', 420: '420/242', 440: '440/254' },
+    single: { 210: '210 (210/105)' }, scott: { 210: '210 (210/105)' }, todo: { 210: '210 (210/105)', 200: '200 (200/100)' }
+  };
+  const MODE_LABEL = { three: '三相', three4w: '三相4線式', single: '単相', scott: 'スコット', todo: '灯動' };
+  // 旧保存値（スコット高圧/低圧・低圧/低圧）は スコット に統一
+  function normUiMode(m) { return m && m.indexOf('scott') === 0 ? 'scott' : (V1_OPTIONS[m] ? m : 'three'); }
 
   const $ = function (id) { return document.getElementById(id); };
   const el = {
@@ -47,7 +53,7 @@
     if (r) { r.checked = true; }
   }
   function uiMode() { return radio('mode') || 'three'; }
-  function calcMode(m) { return m.indexOf('scott') === 0 ? 'scott' : m; }
+  function calcMode(m) { return m === 'three4w' ? 'three' : m; }
 
   // 電圧 select（候補＋手入力）を作る
   function buildVolt(sel, manualInput, list, keep, labels) {
@@ -81,14 +87,14 @@
   function buildVolts(k1, k2) {
     const m = uiMode();
     buildVolt(el.v1, el.v1m, V1_OPTIONS[m], k1);
-    buildVolt(el.v2, el.v2m, V2_OPTIONS[m], k2, V2_LABEL);
+    buildVolt(el.v2, el.v2m, V2_OPTIONS[m], k2, V2_LABELS[m]);
   }
 
   // 容量 select（標準容量＋手入力）
   function buildKva(keep) {
     const m = calcMode(uiMode());
     const labels = m === 'single' ? { 750: '750（JIS外）', 1000: '1000（JIS外）' } : null;
-    buildVolt(el.kvaSel, el.kva, D.capacities[m], keep, labels);
+    buildVolt(el.kvaSel, el.kva, D.capacities[m === 'todo' ? 'three' : m], keep, labels);
   }
 
   function readInput() {
@@ -153,22 +159,43 @@
     const per = n > 1 ? '（各座・' + n + '回路）' : '';
     const t = [];
     let html = '';
+    // 二次側の回路（灯動は 三相回路・単相回路 の2つ）
+    const secs = r.todo ? [
+      [r.todo.three, '（三相 ' + fmt(r.input.kva3, 0) + 'kVA）', '[三相] '],
+      [r.todo.single, '（単相 ' + fmt(r.input.kva1, 0) + 'kVA）', '[単相] ']
+    ] : [[r, per, '']];
 
-    t.push('【変圧器】' + MODE_LABEL[inp.uiMode] + ' ' + (r.input.trType === 'mold' ? 'モールド ' : '油入 ') + r.input.kva + 'kVA ' + r.input.v1 + 'V/' + r.input.v2 + 'V');
+    const v2Lbl = (V2_LABELS[inp.uiMode] && V2_LABELS[inp.uiMode][r.input.v2]) || String(r.input.v2);
+    const kvaLbl = r.todo ? '3φ' + r.input.kva3 + 'kVA＋1φ' + r.input.kva1 + 'kVA（計 ' + r.input.kva + 'kVA）' : r.input.kva + 'kVA';
+    t.push('【変圧器】' + MODE_LABEL[inp.uiMode] + ' ' + (r.input.trType === 'mold' ? 'モールド ' : '油入 ') + kvaLbl + ' ' + r.input.v1 + 'V/' + v2Lbl.split(' ')[0] + 'V');
 
     // 定格電流
-    html += card('定格電流',
-      '<div class="kv">' + kvItem('一次電流 I₁', fmt(r.i1, 2), 'A') + kvItem('二次電流 I₂' + (n > 1 ? '（各座）' : ''), fmt(r.i2, 1), 'A') + '</div>' +
-      (n > 1 ? '<p class="sub-note">スコット二次：M座・T座 各 ' + fmt(r.input.kva / 2, 1) + 'kVA の単相回路</p>' : ''));
-    t.push('一次電流: ' + fmt(r.i1, 2) + 'A / 二次電流' + (n > 1 ? '(各座)' : '') + ': ' + fmt(r.i2, 1) + 'A');
+    if (r.todo) {
+      html += card('定格電流',
+        '<div class="kv">' + kvItem('一次電流 I₁', fmt(r.i1, 2), 'A') + kvItem('二次 三相 I₂', fmt(r.todo.three.i2, 1), 'A') +
+        kvItem('二次 単相 I₂', fmt(r.todo.single.i2, 1), 'A') + '</div>' +
+        '<p class="sub-note">灯動変圧器：一次は合計 ' + fmt(r.input.kva, 0) + 'kVA の三相、二次は 三相 ' + fmt(r.input.kva3, 0) + 'kVA（' + r.input.v2 + 'V）と 単相3線 ' + fmt(r.input.kva1, 0) + 'kVA（' + r.input.v2 + '/' + (r.input.v2 / 2) + 'V）の2回路</p>');
+      t.push('一次電流: ' + fmt(r.i1, 2) + 'A / 二次電流 三相: ' + fmt(r.todo.three.i2, 1) + 'A・単相: ' + fmt(r.todo.single.i2, 1) + 'A');
+    } else {
+      html += card('定格電流',
+        '<div class="kv">' + kvItem('一次電流 I₁', fmt(r.i1, 2), 'A') + kvItem('二次電流 I₂' + (n > 1 ? '（各座）' : ''), fmt(r.i2, 1), 'A') + '</div>' +
+        (n > 1 ? '<p class="sub-note">スコット二次：M座・T座 各 ' + fmt(r.input.kva / 2, 1) + 'kVA の単相回路</p>' : '') +
+        (inp.uiMode === 'three4w' ? '<p class="sub-note">三相4線式 ' + esc(v2Lbl) + 'V：電流は線間電圧 ' + r.input.v2 + 'V で計算</p>' : ''));
+      t.push('一次電流: ' + fmt(r.i1, 2) + 'A / 二次電流' + (n > 1 ? '(各座)' : '') + ': ' + fmt(r.i2, 1) + 'A');
+    }
 
     // 短絡電流
-    let zNote = '変圧器 %Z = ' + fmt(r.z.tr, 2) + '%' + (r.z.trIsDefault ? '（未入力のため標準値）' : '');
-    zNote += r.z.src > 0 ? '、電源側 %Z = ' + fmt(r.z.src, 3) + '%（変圧器容量基準）' : '、電源側は無限大母線';
-    html += card('二次側 短絡電流' + per,
-      '<div class="kv">' + kvItem('合成 %Z', fmt(r.z.total, 2), '%') + kvItem('短絡電流 Is', fmt(r.iscKa, 2), 'kA') + '</div>' +
-      '<p class="sub-note">' + esc(zNote) + '</p>');
-    t.push('二次短絡電流: ' + fmt(r.iscKa, 2) + 'kA（%Z ' + fmt(r.z.total, 2) + '%）');
+    secs.forEach(function (sc) {
+      const rc = sc[0];
+      const sx = sc[1];
+      const tg = sc[2];
+      let zNote = '変圧器 %Z = ' + fmt(rc.z.tr, 2) + '%' + (rc.z.trIsDefault ? '（未入力のため標準値）' : '');
+      zNote += rc.z.src > 0 ? '、電源側 %Z = ' + fmt(rc.z.src, 3) + '%（変圧器容量基準）' : '、電源側は無限大母線';
+      html += card('二次側 短絡電流' + sx,
+        '<div class="kv">' + kvItem('合成 %Z', fmt(rc.z.total, 2), '%') + kvItem('短絡電流 Is', fmt(rc.iscKa, 2), 'kA') + '</div>' +
+        '<p class="sub-note">' + esc(zNote) + '</p>');
+      t.push(tg + '二次短絡電流: ' + fmt(rc.iscKa, 2) + 'kA（%Z ' + fmt(rc.z.total, 2) + '%）');
+    });
 
     // 一次側：高圧 → LBS ヒューズ、低圧 → 一次側ブレーカー
     if (r.fuse) {
@@ -213,40 +240,55 @@
     }
 
     // CT
-    const ctBody = '<div class="kv">' + kvItem('変流比', r.ct.ratio ? esc(r.ct.ratio) : '該当なし', '') +
-      kvItem('定格時 CT二次', r.ct.primary ? fmt(r.i2 * r.ct.secondary / r.ct.primary, 2) : '-', 'A') + '</div>' +
-      '<p class="sub-note">基準: CT一次 ≥ I₂ × ' + D.ct.factor + '（= ' + fmt(r.ct.need, 1) + 'A）の最小標準値（' + esc(D.ct.source) + '）。' +
-      (r.ct.model ? '形名例：三菱 ' + esc(r.ct.model.name) + '（' + r.ct.model.va + 'VA）。' : '') +
-      '負担は計器・THR・配線の合計VA以上。</p>';
-    html += card('二次側 CT' + per, ctBody);
-    t.push('二次側CT' + (n > 1 ? '(各座)' : '') + ': ' + (r.ct.ratio || '該当なし') + (r.ct.model ? '（' + r.ct.model.name + '）' : ''));
+    secs.forEach(function (sc) {
+      const rc = sc[0];
+      const sx = sc[1];
+      const tg = sc[2];
+      const ctBody = '<div class="kv">' + kvItem('変流比', rc.ct.ratio ? esc(rc.ct.ratio) : '該当なし', '') +
+        kvItem('定格時 CT二次', rc.ct.primary ? fmt(rc.i2 * rc.ct.secondary / rc.ct.primary, 2) : '-', 'A') + '</div>' +
+        '<p class="sub-note">基準: CT一次 ≥ I₂ × ' + D.ct.factor + '（= ' + fmt(rc.ct.need, 1) + 'A）の最小標準値（' + esc(D.ct.source) + '）。' +
+        (rc.ct.model ? '形名例：三菱 ' + esc(rc.ct.model.name) + '（' + rc.ct.model.va + 'VA）。' : '') +
+        '負担は計器・THR・配線の合計VA以上。</p>';
+      html += card('二次側 CT' + sx, ctBody);
+      t.push(tg + '二次側CT' + (rc.circuits > 1 ? '(各座)' : '') + ': ' + (rc.ct.ratio || '該当なし') + (rc.ct.model ? '（' + rc.ct.model.name + '）' : ''));
+    });
 
     // THR
-    if (r.thr) {
-      const th = r.thr;
-      const tb = '<div class="kv">' + kvItem('整定値', fmt(th.setting, 1), 'A') + kvItem('機種', esc(th.name + ' ' + th.model), '') + '</div>' +
-        '<p class="sub-note">I₂ ' + fmt(r.i2, 1) + 'A × 5 / ' + esc(th.ct.split('/')[0]) + ' = ' + fmt(th.raw, 3) + 'A → ' + D.thr.step + 'A 単位で切り捨て（過負荷前に警報を出すため）</p>';
-      html += card('二次側 THR（サーマルリレー）' + per, tb, th.verified === false);
-      t.push('THR: ' + th.name + ' ' + th.model + ' 整定 ' + fmt(th.setting, 1) + 'A（CT ' + th.ct + '）');
-    }
+    secs.forEach(function (sc) {
+      const rc = sc[0];
+      const sx = sc[1];
+      const tg = sc[2];
+      if (rc.thr) {
+        const th = rc.thr;
+        const tb = '<div class="kv">' + kvItem('整定値', fmt(th.setting, 1), 'A') + kvItem('機種', esc(th.name + ' ' + th.model), '') + '</div>' +
+          '<p class="sub-note">I₂ ' + fmt(rc.i2, 1) + 'A × 5 / ' + esc(th.ct.split('/')[0]) + ' = ' + fmt(th.raw, 3) + 'A → ' + D.thr.step + 'A 単位で切り捨て（過負荷前に警報を出すため）</p>';
+        html += card('二次側 THR（サーマルリレー）' + sx, tb, th.verified === false);
+        t.push(tg + 'THR: ' + th.name + ' ' + th.model + ' 整定 ' + fmt(th.setting, 1) + 'A（CT ' + th.ct + '）');
+      }
+    });
 
     // 電線・銅バー
-    const cd = r.conductor;
-    let cb = '<p class="sub-note" style="margin-top:0">設計電流 ' + fmt(cd.design, cd.byBreaker ? 0 : 1) + 'A（' + (cd.byBreaker ? '主幹ブレーカー定格以上' : '二次定格電流') + '）</p><table class="res">';
-    const cabTxts = [];
-    cd.cable.forEach(function (c) {
-      const txt = c.sq ? c.sq + 'sq' + (c.parallel > 1 ? ' × ' + c.parallel + '条' : '') : '—（2条超のため銅バー）';
-      const sub = !c.sq ? c.name : c.name + '　' + '許容電流 ' + c.limit + 'A' +
-        (c.parallel > 1 ? '（2条：1本 ≥ ' + fmt(c.need, 1) + 'A＝電流×' + D.cable.parallelRatio + '）' : '');
-      cb += row(esc(c.name.split('（')[0]) + '<br>' + esc(c.temp), '<strong>' + esc(txt) + '</strong><br>' + note(esc(sub)));
-      cabTxts.push(c.name.split('（')[0] + ' ' + c.temp + ' ' + txt);
+    secs.forEach(function (sc) {
+      const rc = sc[0];
+      const sx = sc[1];
+      const tg = sc[2];
+      const cd = rc.conductor;
+      let cb = '<p class="sub-note" style="margin-top:0">設計電流 ' + fmt(cd.design, cd.byBreaker ? 0 : 1) + 'A（' + (cd.byBreaker ? '主幹ブレーカー定格以上' : '二次定格電流') + '）</p><table class="res">';
+      const cabTxts = [];
+      cd.cable.forEach(function (c) {
+        const txt = c.sq ? c.sq + 'sq' + (c.parallel > 1 ? ' × ' + c.parallel + '条' : '') : '—（2条超のため銅バー）';
+        const sub = !c.sq ? c.name : c.name + '　' + '許容電流 ' + c.limit + 'A' +
+          (c.parallel > 1 ? '（2条：1本 ≥ ' + fmt(c.need, 1) + 'A＝電流×' + D.cable.parallelRatio + '）' : '');
+        cb += row(esc(c.name.split('（')[0]) + '<br>' + esc(c.temp), '<strong>' + esc(txt) + '</strong><br>' + note(esc(sub)));
+        cabTxts.push(c.name.split('（')[0] + ' ' + c.temp + ' ' + txt);
+      });
+      const bus = cd.busbar;
+      cb += row('銅バー', '<strong>' + (bus ? esc(bus.size) : '該当なし（個別設計）') + '</strong>' + (bus ? '<br>' + note('許容 ' + bus.ampacity + 'A') : ''));
+      cb += '</table><p class="sub-note">' + esc(D.busCable.note) + '<br>' + esc(D.busbar.note) + '</p>';
+      html += card('二次側 母線（電線・銅バー）' + sx, cb, !(D.busCable.verified && D.busbar.verified));
+      t.push(tg + '母線電線: ' + cabTxts.join(' / '));
+      t.push(tg + '母線銅バー: ' + (bus ? bus.size : '該当なし'));
     });
-    const bus = cd.busbar;
-    cb += row('銅バー', '<strong>' + (bus ? esc(bus.size) : '該当なし（個別設計）') + '</strong>' + (bus ? '<br>' + note('許容 ' + bus.ampacity + 'A') : ''));
-    cb += '</table><p class="sub-note">' + esc(D.busCable.note) + '<br>' + esc(D.busbar.note) + '</p>';
-    html += card('二次側 母線（電線・銅バー）' + per, cb, !(D.busCable.verified && D.busbar.verified));
-    t.push('母線電線: ' + cabTxts.join(' / '));
-    t.push('母線銅バー: ' + (bus ? bus.size : '該当なし'));
 
     // EB（B種接地線）
     if (r.eb) {
@@ -275,38 +317,48 @@
       const eb = '<div class="kv">' + kvItem('EB 接地線', (e.label ? esc(e.label) : '個別検討') + upLine, '') +
         kvItem('一相分容量', fmt(e.phaseKva, 1), 'kVA') + '</div>' +
         '<p class="sub-note">表2.13.1（' + e.voltClass + '）：' + (e.sq !== null ? e.sq + 'mm²' : '範囲外') + '</p>' + up +
-        '<p class="sub-note">B種接地工事の接地線の太さ（' + e.voltClass + '・銅線）。一相分容量：三相=定格÷3、単相=定格、スコット=定格÷2。単相3線式は200V級を適用。<br>' + esc(D.eb.note) + '</p>';
+        '<p class="sub-note">B種接地工事の接地線の太さ（' + e.voltClass + '・銅線）。一相分容量：三相=定格÷3、単相=定格、スコット=定格÷2、灯動=単相分＋三相分÷3。単相3線式は200V級を適用。<br>' + esc(D.eb.note) + '</p>';
       html += card('EB（B種接地線）サイズ', eb, e.verified === false);
       t.push('EB: ' + (e.label || '個別検討') + (e.sizeUp.length ? '（ブレーカー ' + e.baseMax + 'A超は表2.13.2でサイズアップ：' + e.sizeUp.map(function (u) { return '〜' + u.to + 'A ' + u.label; }).join('、') + (e.maxByMain ? '・主幹' : '')  + '）' : ''));
     }
 
     // 主幹ブレーカー（必要時のみ）
-    if (r.breaker) {
-      let bb = '<p class="sub-note" style="margin-top:0">条件: 定格 ≥ ' + fmt(r.breaker.need, 1) + 'A、' + r.breaker.voltClass + ' Icu ≥ ' + fmt(r.iscKa, 2) + 'kA' + (r.input.mode === 'three' ? '' : '（2P）') + '</p><table class="res">';
-      bb += breakerRows(r.breaker, t, '主幹');
-      bb += '</table>';
-      html += card('二次側 主幹ブレーカー' + per, bb, anyUnverified(r.breaker.makers));
-    }
+    secs.forEach(function (sc) {
+      const rc = sc[0];
+      const sx = sc[1];
+      const tg = sc[2];
+      if (rc.breaker) {
+        let bb = '<p class="sub-note" style="margin-top:0">条件: 定格 ≥ ' + fmt(rc.breaker.need, 1) + 'A、' + rc.breaker.voltClass + ' Icu ≥ ' + fmt(rc.iscKa, 2) + 'kA' + (rc.input.mode === 'three' ? '' : '（2P）') + '</p><table class="res">';
+        bb += breakerRows(rc.breaker, t, '主幹');
+        bb += '</table>';
+        html += card('二次側 主幹ブレーカー' + sx, bb, anyUnverified(rc.breaker.makers));
+      }
+    });
 
     // 分岐ブレーカー（フレーム別）
-    const br = r.branch;
-    let brb = '<p class="sub-note" style="margin-top:0">条件: ' + br.voltClass + ' Icu ≥ ' + fmt(r.iscKa, 2) + 'kA' + (r.input.mode === 'three' ? '' : '（2P）') +
-      '。二次定格電流 ' + fmt(r.i2, 1) + 'A を流せるフレームまで表示</p>';
-    Object.keys(br.makers).forEach(function (k) {
-      const m = br.makers[k];
-      brb += '<h3 class="sub-h">' + esc(m.name) + '　<small>' + esc(m.series) + '</small></h3><table class="res">';
-      const tx = [];
-      m.rows.forEach(function (x) {
-        const range = x.minRating === x.maxRating ? x.maxRating + 'A' : x.minRating + '〜' + x.maxRating + 'A';
-        const val = x.ok ? '<strong>' + esc(x.model) + '</strong><br>' + note('Icu ' + x.icu + 'kA　定格 ' + range)
-          : '<strong>該当なし</strong><br>' + note('最大 ' + esc(x.model) + ' Icu ' + x.icu + 'kA で不足（カスケード等を検討）');
-        brb += row(x.af + 'AF', val);
-        tx.push(x.af + 'AF ' + (x.ok ? x.model : '該当なし'));
+    secs.forEach(function (sc) {
+      const rc = sc[0];
+      const sx = sc[1];
+      const tg = sc[2];
+      const br = rc.branch;
+      let brb = '<p class="sub-note" style="margin-top:0">条件: ' + br.voltClass + ' Icu ≥ ' + fmt(rc.iscKa, 2) + 'kA' + (rc.input.mode === 'three' ? '' : '（2P）') +
+        '。二次定格電流 ' + fmt(rc.i2, 1) + 'A を流せるフレームまで表示</p>';
+      Object.keys(br.makers).forEach(function (k) {
+        const m = br.makers[k];
+        brb += '<h3 class="sub-h">' + esc(m.name) + '　<small>' + esc(m.series) + '</small></h3><table class="res">';
+        const tx = [];
+        m.rows.forEach(function (x) {
+          const range = x.minRating === x.maxRating ? x.maxRating + 'A' : x.minRating + '〜' + x.maxRating + 'A';
+          const val = x.ok ? '<strong>' + esc(x.model) + '</strong><br>' + note('Icu ' + x.icu + 'kA　定格 ' + range)
+            : '<strong>該当なし</strong><br>' + note('最大 ' + esc(x.model) + ' Icu ' + x.icu + 'kA で不足（カスケード等を検討）');
+          brb += row(x.af + 'AF', val);
+          tx.push(x.af + 'AF ' + (x.ok ? x.model : '該当なし'));
+        });
+        brb += '</table>';
+        t.push(tg + '分岐(' + m.name + '): ' + tx.join(' / '));
       });
-      brb += '</table>';
-      t.push('分岐(' + m.name + '): ' + tx.join(' / '));
+      html += card('二次側 分岐ブレーカー（フレーム別）' + sx, brb, anyUnverified(br.makers));
     });
-    html += card('二次側 分岐ブレーカー（フレーム別）' + per, brb, anyUnverified(br.makers));
 
     el.results.innerHTML = html;
     t.push('※メーカーカタログ・内線規程・社内規準による選定（data ' + D.version + '）');
@@ -315,9 +367,13 @@
 
   function update() {
     const inp = readInput();
-    el.kva1Field.hidden = !(inp.mode === 'three' && inp.v1 > 600);
+    const todo = inp.mode === 'todo';
+    el.kva1Field.hidden = !(todo || (inp.mode === 'three' && inp.v1 > 600));
     if (el.kva1Field.hidden) { inp.kva1 = null; }
-    el.z.placeholder = '標準 ' + C.defaultZ(inp.mode, inp.kva || 0, inp.v2) + '%';
+    $('kvaLabel').textContent = todo ? '三相分 容量 [kVA]' : '容量 [kVA]';
+    $('kva1Label').textContent = todo ? '単相分 容量 [kVA]（単相3線 210/105V）' : 'LBSを共用する単相変圧器 [kVA]（任意・一括選定）';
+    el.kva1.placeholder = todo ? '単相分の容量を入力' : '空欄=三相単独';
+    el.z.placeholder = '標準 ' + C.defaultZ(todo ? 'three' : inp.mode, (inp.kva || 0) + (todo ? (inp.kva1 || 0) : 0), inp.v2) + '%';
     try {
       const r = C.calculate(inp);
       el.err.textContent = '';
@@ -364,7 +420,7 @@
     $('ver').textContent = 'data ' + D.version;
     const s = load();
     if (s) {
-      setRadio('mode', V1_OPTIONS[s.uiMode] ? s.uiMode : 'three');
+      setRadio('mode', normUiMode(s.uiMode));
       setRadio('trType', s.trType === 'mold' ? 'mold' : 'oil');
       setRadio('mainBrk', s.mainBreaker ? 'yes' : 'no');
       el.z.value = s.z || '';

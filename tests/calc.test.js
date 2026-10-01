@@ -370,3 +370,33 @@ test('データ表は昇順', () => {
   [mi.single[3300], mi.single[6600], mi.three[3300], mi.three[6600]].forEach((t) => assert.ok(asc(t.map((x) => x[0]))));
   assert.ok(asc(mi.combined.map((x) => x[0])));
 });
+
+test('三相4線式は三相と同じ計算（二次は線間電圧）', () => {
+  const a = C.calculate({ mode: 'three4w', kva: 300, v1: 6600, v2: 415 });
+  const b = C.calculate({ mode: 'three', kva: 300, v1: 6600, v2: 415 });
+  near(a.i2, 300000 / (Math.sqrt(3) * 415), 1e-9);
+  assert.strictEqual(a.ct.ratio, b.ct.ratio);
+  assert.strictEqual(a.eb.voltClass, '400V級');
+  assert.strictEqual(a.eb.label, b.eb.label);
+});
+
+test('灯動変圧器：一次は合計容量の三相、二次は三相回路と単相回路、EBは単相＋三相÷3', () => {
+  const r = C.calculate({ mode: 'todo', kva: 75, kva1: 25, v1: 6600, v2: 210 });
+  const t = C.calculate({ mode: 'three', kva: 100, v1: 6600, v2: 210 });
+  near(r.i1, t.i1, 1e-9);
+  assert.strictEqual(r.fuse.mitsubishi.min, t.fuse.mitsubishi.min); // LBS は合計 100kVA の三相で選定
+  assert.strictEqual(r.fuse.fuji.value, t.fuse.fuji.value);
+  near(r.todo.three.i2, 75000 / (Math.sqrt(3) * 210), 1e-9);
+  near(r.todo.single.i2, 25000 / 210, 1e-9);
+  assert.strictEqual(r.todo.three.ct.ratio, '300/5A'); // 206.2×1.25=257.7
+  assert.strictEqual(r.todo.single.ct.ratio, '150/5A'); // 119.0×1.25=148.8
+  near(r.eb.phaseKva, 25 + 75 / 3, 1e-9); // 50kVA・200V級 → 22mm²
+  assert.strictEqual(r.eb.label, '22mm²');
+  assert.strictEqual(r.todo.three.z.tr, r.z.tr); // %Z は合計容量の値
+  assert.throws(() => C.calculate({ mode: 'todo', kva: 75, v1: 6600, v2: 210 }));
+});
+
+test('スコットは一次電圧で高圧/低圧を判定', () => {
+  assert.ok(C.calculate({ mode: 'scott', kva: 50, v1: 6600, v2: 210 }).fuse);
+  assert.ok(C.calculate({ mode: 'scott', kva: 50, v1: 440, v2: 210 }).primaryBreaker);
+});

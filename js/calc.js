@@ -19,6 +19,7 @@
 
   function normMode(input) {
     if (MODES.indexOf(input.mode) >= 0) { return input.mode; }
+    if (input.mode === 'three4w') { return 'three'; }
     return input.phase === 1 ? 'single' : 'three';
   }
 
@@ -279,8 +280,34 @@
    * input: { mode: 'single'|'three'|'scott'（旧: phase 1|3）, kva, v1, v2,
    *          z, iscKa, trType: 'oil'|'mold', kva1（三相と一括でLBSを共用する単相kVA）,
    *          mainBreaker: true で二次主幹ブレーカーも選定（既定は不要） }
+   * mode 'todo'（灯動変圧器）：kva=三相分、kva1=単相分。'three4w' は 'three' と同じ計算（二次は線間電圧）
    */
+  // 灯動変圧器：一次（LBS・一次電流）は合計容量の三相変圧器として、
+  // 二次は 三相回路（kva）と 単相3線回路（kva1）をそれぞれ選定。EB は 単相＋三相÷3（ユーザー指定）
+  function calculateTodo(input) {
+    const k3 = Number(input.kva);
+    const k1 = Number(input.kva1);
+    if (!(k3 > 0) || !(k1 > 0)) {
+      throw new Error('灯動変圧器は三相分・単相分の容量を入力してください。');
+    }
+    const base = calculate(Object.assign({}, input, { mode: 'three', kva: k3 + k1, kva1: 0 }));
+    // %Z は合計容量の値（入力値または標準値）を各回路に使う
+    const sub = Object.assign({}, input, { z: base.z.tr, kva1: 0 });
+    const c3 = calculate(Object.assign({}, sub, { mode: 'three', kva: k3 }));
+    const c1 = calculate(Object.assign({}, sub, { mode: 'single', kva: k1 }));
+    const maxA = Math.max(c3.eb.maxA, c1.eb.maxA);
+    const eb = Object.assign(selectEB('single', k1 + k3 / 3, base.input.v2, maxA),
+      { maxA: maxA, maxByMain: c3.eb.maxByMain, i2: c3.eb.maxA >= c1.eb.maxA ? c3.i2 : c1.i2, todo: true });
+    if (base.fuse) { base.fuse.warn.push('灯動変圧器：一次側は合計 ' + (k3 + k1) + 'kVA の三相変圧器として選定しています。'); }
+    return Object.assign(base, {
+      input: Object.assign({}, base.input, { mode: 'todo', kva3: k3, kva1: k1 }),
+      todo: { three: c3, single: c1 },
+      eb: eb
+    });
+  }
+
   function calculate(input) {
+    if (input.mode === 'todo') { return calculateTodo(input); }
     const mode = normMode(input);
     const kva = Number(input.kva);
     const v1 = Number(input.v1);
