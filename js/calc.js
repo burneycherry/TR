@@ -6,6 +6,8 @@
 
   const D = (typeof TR_DATA !== 'undefined') ? TR_DATA : require('./data.js');
   const SQRT3 = Math.sqrt(3);
+  const LV_MAX = 600; // これ以下を低圧とみなす [V]
+  const MODES = ['single', 'three', 'scott'];
 
   // 昇順配列から value 以上の最小値。無ければ null
   function pickAtLeast(list, value) {
@@ -15,8 +17,13 @@
     return null;
   }
 
-  function defaultZ(phase, kva) {
-    const t = D.defaultZ[phase === 1 ? 'single' : 'three'];
+  function normMode(input) {
+    if (MODES.indexOf(input.mode) >= 0) { return input.mode; }
+    return input.phase === 1 ? 'single' : 'three';
+  }
+
+  function defaultZ(mode, kva) {
+    const t = D.defaultZ[mode === 'single' || mode === 1 ? 'single' : 'three'];
     let z = t[0][1];
     for (let i = 0; i < t.length; i++) {
       if (kva >= t[i][0]) { z = t[i][1]; }
@@ -24,39 +31,93 @@
     return z;
   }
 
-  // 定格電流 [A]
+  // 定格電流 [A]（phase: 1 | 3）
   function ratedCurrent(phase, kva, volt) {
     return phase === 1 ? kva * 1000 / volt : kva * 1000 / (SQRT3 * volt);
   }
 
   // 電源側 %Z（変圧器容量基準）。iscKa: 一次側三相短絡電流 [kA]
-  function sourceZ(phase, kva, v1, iscKa) {
+  function sourceZ(mode, kva, v1, iscKa) {
     if (!iscKa || iscKa <= 0) { return 0; }
     // 単相変圧器は線間に接続 → 線間短絡電流 = √3/2 × 三相短絡電流
-    const sccKva = phase === 1 ? v1 * (SQRT3 / 2) * iscKa : SQRT3 * v1 * iscKa;
+    const sccKva = mode === 'single' ? v1 * (SQRT3 / 2) * iscKa : SQRT3 * v1 * iscKa;
     return kva / sccKva * 100;
   }
 
-  function selectFuse(phase, kva, v1, i1) {
+  // ヒューズ表の電圧区分（3.3kV / 6.6kV）
+  function fuseVoltClass(v1) {
+    if (v1 >= 3000 && v1 <= 3600) { return 3300; }
+    if (v1 >= 6000 && v1 <= 7200) { return 6600; }
+    return null;
+  }
+
+  function fmtMitsu(cell) {
+    if (cell === null || cell === undefined) { return null; }
+    if (cell === '※') { return 'CLS形 M400A'; }
+    return 'G' + cell[0] + ' (T' + cell[1] + ')A';
+  }
+
+  function fuseMitsubishi(m, mode, kva, vc, i3, kva1, i1single) {
+    if (!vc) { return { ok: false, msg: '3.3kV / 6.6kV 以外は選定表の対象外' }; }
+    if (mode === 'three' && kva1 > 0) {
+      // 表5(2) 一括用：各相の三相＋単相定格電流の合計 Im
+      const im = i3 + i1single;
+      for (let i = 0; i < m.combined.length; i++) {
+        if (im <= m.combined[i][0]) {
+          return { ok: true, method: '表5(2) 一括用 Im = ' + im.toFixed(2) + 'A', value: fmtMitsu(m.combined[i][1]) };
+        }
+      }
+      return { ok: false, method: '表5(2) 一括用 Im = ' + im.toFixed(2) + 'A', msg: '表の範囲外' };
+    }
+    const rows = m[mode === 'single' ? 'single' : 'three'][vc];
+    for (let i = 0; i < rows.length; i++) {
+      if (rows[i][0] >= kva) {
+        const r = rows[i];
+        const approx = r[0] !== kva;
+        if (r[1] === null) { return { ok: false, msg: '表で適用外（—）', row: r[0], approx: approx }; }
+        return {
+          ok: true, method: '表5(1) ' + r[0] + 'kVA 行' + (approx ? '（直近上位容量）' : ''),
+          min: fmtMitsu(r[1]), max: fmtMitsu(r[2]), row: r[0], approx: approx
+        };
+      }
+    }
+    return { ok: false, msg: '表の範囲外' };
+  }
+
+  function fuseFuji(f, mode, kva, vc, trType, kva1) {
+    if (!vc) { return { ok: false, msg: '3.3kV / 6.6kV 以外は選定表の対象外' }; }
+    const t = f[trType === 'mold' ? 'mold' : 'oil'][vc];
+    const k3 = mode === 'single' ? 0 : kva;
+    const k1 = mode === 'single' ? kva : (mode === 'three' && kva1 > 0 ? kva1 : 0);
+    const ri = t.rows.findIndex(function (v) { return v >= k3; });
+    const ci = t.cols.findIndex(function (v) { return v >= k1; });
+    if (ri < 0 || ci < 0) { return { ok: false, model: t.model, msg: '表の範囲外' }; }
+    const g = t.g[ri][ci];
+    const approx = t.rows[ri] !== k3 || t.cols[ci] !== k1;
+    const where = '三相' + (t.rows[ri] || '—') + ' × 単相' + (t.cols[ci] || '—') + (approx ? '（直近上位容量）' : '');
+    if (g === null) { return { ok: false, model: t.model, method: where, msg: '表で適用外（—）' }; }
+    return { ok: true, model: t.model, method: where, value: 'G' + g + 'A', approx: approx };
+  }
+
+  function selectFuse(mode, kva, v1, trType, kva1) {
     const L = D.lbs;
+    const vc = fuseVoltClass(v1);
     const warn = [];
-    const limit = phase === 1 ? L.maxKvaSingle : L.maxKvaThree;
-    if (L.voltages.indexOf(v1) < 0) {
-      warn.push('一次電圧 ' + v1 + 'V は7.2kV級LBS・PFの適用外です。');
+    if (!vc) { warn.push('一次電圧 ' + v1 + 'V はヒューズ選定表（3.3kV/6.6kV）の対象外です。'); }
+    const total = kva + (mode === 'three' && kva1 > 0 ? kva1 : 0);
+    if (total > L.maxKva) {
+      warn.push('LBS(PF付)で開閉する変圧器は ' + L.maxKva + 'kVA 以下が目安です（高圧受電設備規程）。VCB+OCR 等を検討してください。');
     }
-    if (kva > limit) {
-      warn.push('変圧器 ' + limit + 'kVA 超は LBS(PF付) ではなく VCB+OCR 等での保護が一般的です（高圧受電設備規程）。');
-    }
-    const makers = {};
-    Object.keys(L.makers).forEach(function (k) {
-      const m = L.makers[k];
-      const need = i1 * m.factor;
-      makers[k] = {
-        name: m.name, fuse: m.fuse, factor: m.factor, need: need,
-        rating: pickAtLeast(m.series, need), verified: m.verified
-      };
-    });
-    return { makers: makers, warn: warn };
+    if (mode === 'scott') { warn.push('スコット変圧器は三相容量として三相の表で選定しています。'); }
+    const i3 = mode === 'single' ? 0 : ratedCurrent(3, kva, v1);
+    const i1s = mode === 'single' ? ratedCurrent(1, kva, v1) : (kva1 > 0 ? ratedCurrent(1, kva1, v1) : 0);
+    return {
+      warn: warn,
+      mitsubishi: Object.assign({ name: L.makers.mitsubishi.name, series: L.makers.mitsubishi.series, note: L.makers.mitsubishi.note, verified: L.makers.mitsubishi.verified },
+        fuseMitsubishi(L.makers.mitsubishi, mode, kva, vc, i3, kva1, i1s)),
+      fuji: Object.assign({ name: L.makers.fuji.name, series: L.makers.fuji.series, note: L.makers.fuji.note, verified: L.makers.fuji.verified },
+        fuseFuji(L.makers.fuji, mode, kva, vc, trType, kva1))
+    };
   }
 
   function selectCT(i2) {
@@ -104,9 +165,9 @@
     return null;
   }
 
-  // 主幹ブレーカー：定格電流 ≥ need、Icu ≥ 短絡電流 の最小フレーム・最下位グレード
-  function selectBreaker(need, iscKa, v2) {
-    const col = v2 <= 240 ? 0 : 1;
+  // ブレーカー：定格電流 ≥ need、Icu ≥ 短絡電流 の最小フレーム・最下位グレード
+  function selectBreaker(need, iscKa, volt) {
+    const col = volt <= 240 ? 0 : 1;
     const makers = {};
     Object.keys(D.breaker.makers).forEach(function (k) {
       const m = D.breaker.makers[k];
@@ -120,30 +181,55 @@
       }
       makers[k] = { name: m.name, series: m.series, pick: hit, verified: m.verified };
     });
-    return { need: need, voltClass: col === 0 ? 'AC230V級' : 'AC440V級', makers: makers };
+    return { need: need, iscKa: iscKa, voltClass: col === 0 ? 'AC230V級' : 'AC440V級', makers: makers };
+  }
+
+  // B種接地線(EB)
+  function selectEB(mode, kva, v2) {
+    const phaseKva = mode === 'three' ? kva / 3 : (mode === 'scott' ? kva / 2 : kva);
+    const col = v2 <= 150 ? 0 : (v2 <= 300 ? 1 : 2);
+    const t = D.eb.table;
+    for (let i = 0; i < t.length; i++) {
+      if (phaseKva <= t[i][col]) {
+        return { phaseKva: phaseKva, voltClass: ['100V級', '200V級', '400V級'][col], sq: t[i][3], verified: D.eb.verified };
+      }
+    }
+    return { phaseKva: phaseKva, voltClass: ['100V級', '200V級', '400V級'][col], sq: null, verified: D.eb.verified };
   }
 
   /*
-   * input: { phase: 1|3, kva, v1, v2, z (省略可), iscKa (省略可) }
+   * input: { mode: 'single'|'three'|'scott'（旧: phase 1|3）, kva, v1, v2,
+   *          z, iscKa, trType: 'oil'|'mold', kva1（三相と一括でLBSを共用する単相kVA） }
    */
   function calculate(input) {
-    const phase = input.phase === 1 ? 1 : 3;
+    const mode = normMode(input);
     const kva = Number(input.kva);
     const v1 = Number(input.v1);
     const v2 = Number(input.v2);
     if (!(kva > 0) || !(v1 > 0) || !(v2 > 0)) {
       throw new Error('容量・一次電圧・二次電圧を正しく入力してください。');
     }
+    const trType = input.trType === 'mold' ? 'mold' : 'oil';
+    const kva1 = mode === 'three' && Number(input.kva1) > 0 ? Number(input.kva1) : 0;
+    const hv = v1 > LV_MAX;
     const zInput = Number(input.z);
-    const zTr = zInput > 0 ? zInput : defaultZ(phase, kva);
-    const zSrc = sourceZ(phase, kva, v1, Number(input.iscKa));
+    const zTr = zInput > 0 ? zInput : defaultZ(mode, kva);
+    const iscIn = Number(input.iscKa) > 0 ? Number(input.iscKa) : 0;
+    const zSrc = sourceZ(mode, kva, v1, iscIn);
     const zTotal = zTr + zSrc;
 
-    const i1 = ratedCurrent(phase, kva, v1);
-    const i2 = ratedCurrent(phase, kva, v2);
+    const circuits = mode === 'scott' ? 2 : 1;
+    const i1 = ratedCurrent(mode === 'single' ? 1 : 3, kva, v1);
+    // スコットは M座・T座 各 kVA/2 の単相回路
+    const i2 = mode === 'three' ? ratedCurrent(3, kva, v2) : ratedCurrent(1, kva / circuits, v2);
     const iscKa = i2 * 100 / zTotal / 1000;
 
-    const fuse = selectFuse(phase, kva, v1, i1);
+    const fuse = hv ? selectFuse(mode, kva, v1, trType, kva1) : null;
+    let primaryBreaker = null;
+    if (!hv) {
+      primaryBreaker = selectBreaker(i1 * D.breaker.primaryFactor, iscIn, v1);
+      primaryBreaker.iscGiven = iscIn > 0;
+    }
     const ct = selectCT(i2);
     const thr = selectTHR(i2, ct.primary);
     const brk = selectBreaker(i2 * D.breaker.factor, iscKa, v2);
@@ -156,18 +242,21 @@
     });
 
     return {
-      input: { phase: phase, kva: kva, v1: v1, v2: v2 },
+      input: { mode: mode, kva: kva, v1: v1, v2: v2, trType: trType, kva1: kva1 },
+      hv: hv, circuits: circuits,
       z: { tr: zTr, trIsDefault: !(zInput > 0), src: zSrc, total: zTotal },
       i1: i1, i2: i2, iscKa: iscKa,
-      fuse: fuse, ct: ct, thr: thr, breaker: brk,
-      conductor: { design: design, cable: selectCable(design), busbar: selectBusbar(design) }
+      fuse: fuse, primaryBreaker: primaryBreaker, ct: ct, thr: thr, breaker: brk,
+      conductor: { design: design, cable: selectCable(design), busbar: selectBusbar(design) },
+      eb: hv ? selectEB(mode, kva, v2) : null
     };
   }
 
   const api = {
     calculate: calculate, ratedCurrent: ratedCurrent, defaultZ: defaultZ, sourceZ: sourceZ,
     pickAtLeast: pickAtLeast, selectCable: selectCable, selectBusbar: selectBusbar,
-    selectBreaker: selectBreaker, selectCT: selectCT, selectTHR: selectTHR, data: D
+    selectBreaker: selectBreaker, selectCT: selectCT, selectTHR: selectTHR, selectFuse: selectFuse,
+    selectEB: selectEB, data: D
   };
   root.TRCalc = api;
   if (typeof module !== 'undefined' && module.exports) { module.exports = api; }

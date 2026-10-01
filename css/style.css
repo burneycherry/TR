@@ -86,6 +86,12 @@ input:focus, select:focus { outline: 2px solid #4a90d9; outline-offset: 0; borde
 .seg input { position: absolute; opacity: 0; pointer-events: none; }
 .seg span { display: block; padding: 9px 0; font-size: 15px; color: #1f4e79; }
 .seg input:checked + span { background: #1f4e79; color: #ffffff; font-weight: 700; }
+.seg4 { display: grid; grid-template-columns: 1fr 1fr 1fr 1fr; }
+.seg4 label + label span { border-left: 1px solid #1f4e79; }
+.seg span small { font-size: 10px; font-weight: 400; }
+.seg4 span { padding: 6px 0; line-height: 1.25; height: 100%; display: flex; flex-direction: column; justify-content: center; }
+.manual { margin-top: 6px; }
+[hidden] { display: none !important; }
 
 .chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
 .chips button {
@@ -172,6 +178,7 @@ table.res tr:last-child th, table.res tr:last-child td { border-bottom: none; }
   input[type="number"], select { background-color: #0f1720; color: #e4e9ef; border-color: #34414f; }
   .seg { border-color: #4a90d9; }
   .seg span { color: #8cbcf0; }
+  .seg4 label + label span { border-left-color: #4a90d9; }
   .seg input:checked + span { background: #2c6aa8; color: #ffffff; }
   .chips button { background: #0f1720; border-color: #34414f; color: #e4e9ef; }
   .chips button.on { background: #2c6aa8; border-color: #2c6aa8; }
