@@ -1,0 +1,187 @@
+/* CSSカスタムプロパティは使用しない方針（コピペ時の変換対策） */
+* { box-sizing: border-box; }
+
+html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
+
+body {
+  margin: 0;
+  background: #eef2f6;
+  color: #1b2430;
+  font-family: -apple-system, BlinkMacSystemFont, "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Noto Sans JP", "Yu Gothic", sans-serif;
+  font-size: 15px;
+  line-height: 1.5;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.app-header {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  padding: 10px 16px;
+  padding-top: calc(10px + env(safe-area-inset-top));
+  padding-left: calc(16px + env(safe-area-inset-left));
+  padding-right: calc(16px + env(safe-area-inset-right));
+  background: #1f4e79;
+  color: #ffffff;
+}
+.app-header h1 { margin: 0; font-size: 18px; font-weight: 700; }
+.app-header .ver { font-size: 11px; opacity: 0.75; }
+
+main {
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 12px 16px;
+  padding-left: calc(16px + env(safe-area-inset-left));
+  padding-right: calc(16px + env(safe-area-inset-right));
+  padding-bottom: calc(24px + env(safe-area-inset-bottom));
+}
+
+.card {
+  background: #ffffff;
+  border-radius: 12px;
+  padding: 14px;
+  margin-bottom: 12px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+}
+.card h2 {
+  margin: 0 0 10px;
+  font-size: 15px;
+  color: #1f4e79;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.field { margin-bottom: 12px; min-width: 0; }
+.label { display: block; font-size: 12px; color: #5b6878; margin-bottom: 4px; }
+
+input[type="number"], select {
+  width: 100%;
+  font-size: 16px; /* iOSのズーム防止 */
+  padding: 10px 12px;
+  border: 1px solid #c8d1dc;
+  border-radius: 8px;
+  background: #ffffff;
+  color: #1b2430;
+  -webkit-appearance: none;
+  appearance: none;
+}
+select {
+  background-image: linear-gradient(45deg, transparent 50%, #5b6878 50%), linear-gradient(135deg, #5b6878 50%, transparent 50%);
+  background-position: calc(100% - 18px) 50%, calc(100% - 13px) 50%;
+  background-size: 5px 5px, 5px 5px;
+  background-repeat: no-repeat;
+  padding-right: 30px;
+}
+input:focus, select:focus { outline: 2px solid #4a90d9; outline-offset: 0; border-color: #4a90d9; }
+
+.row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+
+.seg { display: flex; border: 1px solid #1f4e79; border-radius: 8px; overflow: hidden; }
+.seg label { flex: 1; text-align: center; cursor: pointer; }
+.seg input { position: absolute; opacity: 0; pointer-events: none; }
+.seg span { display: block; padding: 9px 0; font-size: 15px; color: #1f4e79; }
+.seg input:checked + span { background: #1f4e79; color: #ffffff; font-weight: 700; }
+
+.chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.chips button {
+  font-size: 13px;
+  padding: 5px 10px;
+  border-radius: 14px;
+  border: 1px solid #c8d1dc;
+  background: #f6f8fb;
+  color: #1b2430;
+}
+.chips button.on { background: #1f4e79; border-color: #1f4e79; color: #ffffff; }
+
+.hint { margin: 0; font-size: 13px; color: #c0392b; min-height: 0; }
+
+/* 結果 */
+.kv { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.kv .item { background: #f6f8fb; border-radius: 8px; padding: 8px 10px; min-width: 0; }
+.kv .k { font-size: 12px; color: #5b6878; }
+.kv .v { font-size: 20px; font-weight: 700; color: #1b2430; word-break: break-all; }
+.kv .v small { font-size: 12px; font-weight: 400; color: #5b6878; margin-left: 2px; }
+
+table.res { width: 100%; border-collapse: collapse; font-size: 14px; }
+table.res th, table.res td { padding: 7px 6px; border-bottom: 1px solid #e3e8ee; text-align: left; vertical-align: top; }
+table.res th { font-size: 12px; color: #5b6878; font-weight: 400; white-space: nowrap; width: 30%; }
+table.res td strong { font-size: 16px; }
+table.res tr:last-child th, table.res tr:last-child td { border-bottom: none; }
+
+.sub-note { font-size: 12px; color: #5b6878; margin: 8px 0 0; }
+.warn { background: #fff4e5; color: #8a4b00; border-radius: 8px; padding: 8px 10px; font-size: 13px; margin-top: 8px; }
+
+.badge {
+  display: inline-block;
+  font-size: 10px;
+  font-weight: 700;
+  padding: 2px 6px;
+  border-radius: 4px;
+  background: #fde8e8;
+  color: #b42318;
+}
+
+.actions { display: flex; gap: 10px; margin-bottom: 12px; }
+.actions button {
+  flex: 1;
+  font-size: 15px;
+  padding: 12px;
+  border-radius: 10px;
+  border: none;
+  background: #1f4e79;
+  color: #ffffff;
+  font-weight: 700;
+}
+.actions button.sub { background: #dfe6ee; color: #1b2430; }
+
+.notes ul { margin: 0; padding-left: 18px; font-size: 13px; color: #3c4855; }
+.notes li { margin-bottom: 4px; }
+
+.toast {
+  position: fixed;
+  left: 50%;
+  bottom: calc(24px + env(safe-area-inset-bottom));
+  transform: translateX(-50%);
+  background: rgba(20, 30, 40, 0.9);
+  color: #ffffff;
+  padding: 8px 16px;
+  border-radius: 18px;
+  font-size: 14px;
+  opacity: 0;
+  transition: opacity 0.2s;
+  pointer-events: none;
+}
+.toast.show { opacity: 1; }
+
+@media (max-width: 380px) {
+  .row2 { grid-template-columns: 1fr; gap: 0; }
+  .kv .v { font-size: 18px; }
+}
+
+@media (prefers-color-scheme: dark) {
+  body { background: #0f1720; color: #e4e9ef; }
+  .app-header { background: #0f2a44; }
+  .card { background: #18222e; box-shadow: none; }
+  .card h2 { color: #8cbcf0; }
+  .label, .kv .k, .kv .v small, table.res th, .sub-note { color: #98a6b5; }
+  input[type="number"], select { background-color: #0f1720; color: #e4e9ef; border-color: #34414f; }
+  .seg { border-color: #4a90d9; }
+  .seg span { color: #8cbcf0; }
+  .seg input:checked + span { background: #2c6aa8; color: #ffffff; }
+  .chips button { background: #0f1720; border-color: #34414f; color: #e4e9ef; }
+  .chips button.on { background: #2c6aa8; border-color: #2c6aa8; }
+  .kv .item { background: #0f1720; }
+  .kv .v { color: #e4e9ef; }
+  table.res th, table.res td { border-bottom-color: #2a3542; }
+  .warn { background: #3a2a10; color: #f5c77e; }
+  .badge { background: #4a1d1d; color: #ffb4ab; }
+  .actions button { background: #2c6aa8; }
+  .actions button.sub { background: #2a3542; color: #e4e9ef; }
+  .notes ul { color: #b8c4d0; }
+  .hint { color: #ff8a7a; }
+}
