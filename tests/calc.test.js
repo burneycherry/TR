@@ -104,7 +104,7 @@ test('スコット 低圧/低圧：一次側ブレーカー、LBSなし、EBは�
   const r = C.calculate({ mode: 'scott', kva: 50, v1: 440, v2: 210, iscKa: 10 });
   assert.strictEqual(r.fuse, null);
   assert.strictEqual(r.eb.phaseKva, 25); // スコット＝定格÷2
-  assert.strictEqual(r.eb.label, '14mm²'); // 200V級 25kVA→表2.13.1 14mm²（主幹なし）
+  assert.strictEqual(r.eb.label, '14mm²'); // 200V級 25kVA→表2.13.1 14mm²
   near(r.i1, 50000 / (Math.sqrt(3) * 440), 1e-9);
   Object.values(r.primaryBreaker.makers).forEach((m) => {
     assert.ok(m.pick.rating >= r.i1 * C.data.breaker.primaryFactor);
@@ -112,34 +112,22 @@ test('スコット 低圧/低圧：一次側ブレーカー、LBSなし、EBは�
   });
 });
 
-test('EB：主幹なしは表2.13.1 のみ', () => {
-  // 三相100kVA 6600/210V：一相33.3kVA・200V級 → 14mm²
-  const r1 = C.calculate({ mode: 'three', kva: 100, v1: 6600, v2: 210 });
-  assert.strictEqual(r1.eb.label, '14mm²');
-  assert.strictEqual(r1.eb.byT2, false);
-  assert.strictEqual(r1.eb.t2, null);
-  assert.strictEqual(C.calculate({ mode: 'three', kva: 300, v1: 6600, v2: 210 }).eb.label, '38mm²');
-  assert.strictEqual(C.calculate({ mode: 'single', kva: 10, v1: 6600, v2: 210 }).eb.label, '5.5mm²');
-});
-
-test('EB：主幹ありは表2.13.2（主幹定格）の方が太ければ採用（備考(2)）', () => {
-  // 三相100kVA 6600/210V 主幹300A：表2.13.1→14mm²、表2.13.2 400A以下→22mm²
+test('EB：表2.13.1 で選定し、ブレーカー定格によるサイズアップ（表2.13.2）を併記', () => {
+  // 三相100kVA 210V：一相33.3kVA・200V級 → 14mm²。250A以下はそのまま、400A以下22・600A以下38・1000A以下60
   const r1 = C.calculate({ mode: 'three', kva: 100, v1: 6600, v2: 210, mainBreaker: true });
-  assert.strictEqual(r1.eb.breakerA, 300);
-  assert.strictEqual(r1.eb.label, '22mm²');
-  assert.strictEqual(r1.eb.byT2, true);
-  // 単相10kVA 主幹50A：表2.13.2 2.0mm（細い）→表2.13.1 5.5mm²
-  const r0 = C.calculate({ mode: 'single', kva: 10, v1: 6600, v2: 210, mainBreaker: true });
-  assert.strictEqual(r0.eb.byT2, false);
+  assert.strictEqual(r1.eb.label, '14mm²'); // 主幹の有無で変えない
+  assert.strictEqual(r1.eb.baseMax, 250);
+  assert.deepStrictEqual(r1.eb.sizeUp.map((u) => u.from + '-' + u.to + ':' + u.label),
+    ['250-400:22mm²', '400-600:38mm²', '600-1000:60mm²']);
+  // 単相10kVA：5.5mm²（100A以下）→ 150A以下 8mm² から
+  const r0 = C.calculate({ mode: 'single', kva: 10, v1: 6600, v2: 210 });
   assert.strictEqual(r0.eb.label, '5.5mm²');
-  // selectEB 直接：三相300kVA 824.8A→表2.13.2 1000A以下→60mm²
-  const r = C.selectEB('three', 300, 210, 824.8);
-  assert.strictEqual(r.sq, 38);
-  assert.strictEqual(r.label, '60mm²');
-  // 1000A 超は表2.13.2 範囲外 → 表2.13.1
-  const r2 = C.selectEB('three', 1000, 210, 2749);
-  assert.strictEqual(r2.t2, null);
+  assert.strictEqual(r0.eb.baseMax, 100);
+  assert.strictEqual(r0.eb.sizeUp[0].label, '8mm²');
+  // 三相1000kVA 210V：100mm² は表2.13.2 最大(60)より太い → サイズアップなし
+  const r2 = C.selectEB('three', 1000, 210);
   assert.strictEqual(r2.label, '100mm²');
+  assert.strictEqual(r2.sizeUp.length, 0);
 });
 
 test('標準容量（日立ラインアップ／単相750・1000追加）', () => {

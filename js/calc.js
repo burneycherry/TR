@@ -231,27 +231,30 @@
     return { iscKa: iscKa, voltClass: col === 0 ? 'AC230V級' : 'AC440V級', makers: makers };
   }
 
-  // B種接地線(EB)
-  // breakerA：変圧器低圧側を保護する配線用遮断器等の定格（表2.13.2 照合用）。0/未指定は表2.13.1 のみ
-  // 備考(2)の「変圧器の低圧側を保護する配線用遮断器等」＝二次主幹ブレーカー。主幹なしは表2.13.1 のみ（ユーザー確認済み）
-  function selectEB(mode, kva, v2, breakerA) {
+  // B種接地線(EB)：表2.13.1（一相分容量・電圧級）
+  // 備考(2)：低圧側を保護する遮断器（分岐・主幹）の定格によっては表2.13.2 の方が太くなる
+  // → 自動採用せず「ブレーカー定格による サイズアップ」の目安として表示（ユーザー指定）
+  function selectEB(mode, kva, v2) {
     const phaseKva = mode === 'three' ? kva / 3 : (mode === 'scott' ? kva / 2 : kva);
     const col = v2 <= 150 ? 0 : (v2 <= 300 ? 1 : 2);
     const E = D.eb;
-    const res = { phaseKva: phaseKva, voltClass: ['100V級', '200V級', '400V級'][col], sq: null, verified: E.verified };
+    const res = { phaseKva: phaseKva, voltClass: ['100V級', '200V級', '400V級'][col], sq: null, sizeUp: [], verified: E.verified };
     for (let i = 0; i < E.table.length; i++) {
       if (phaseKva <= E.table[i][col]) { res.sq = E.table[i][3]; break; }
     }
-    // 備考(2)：表2.13.2 の太さの方が太ければそちらを採用
-    res.breakerA = breakerA;
-    res.t2 = null;
-    if (breakerA > 0) {
+    res.label = res.sq !== null ? res.sq + 'mm²' : null;
+    if (res.sq !== null) {
+      // baseMax：表2.13.1 の太さのままで良いブレーカー定格の上限
+      res.baseMax = 0;
       for (let j = 0; j < E.table2.length; j++) {
-        if (breakerA <= E.table2[j][0]) { res.t2 = { limit: E.table2[j][0], label: E.table2[j][1], mm2: E.table2[j][2] }; break; }
+        const t = E.table2[j];
+        if (t[2] > res.sq) {
+          res.sizeUp.push({ from: j > 0 ? E.table2[j - 1][0] : 0, to: t[0], label: t[1] });
+        } else {
+          res.baseMax = t[0];
+        }
       }
     }
-    res.byT2 = !!(res.t2 && res.sq !== null && res.t2.mm2 > res.sq);
-    res.label = res.byT2 ? res.t2.label : (res.sq !== null ? res.sq + 'mm²' : null);
     return res;
   }
 
@@ -310,7 +313,7 @@
       i1: i1, i2: i2, iscKa: iscKa,
       fuse: fuse, primaryBreaker: primaryBreaker, ct: ct, thr: thr, breaker: brk, branch: branch,
       conductor: { design: design, byBreaker: !!brk, cable: selectCable(design, D.busCable.tables), busbar: selectBusbar(design) },
-      eb: selectEB(mode, kva, v2, brk ? design : 0)
+      eb: selectEB(mode, kva, v2)
     };
   }
 
