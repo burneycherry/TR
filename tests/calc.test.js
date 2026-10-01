@@ -328,7 +328,7 @@ test('不正入力はエラー', () => {
   assert.throws(() => C.calculate({ phase: 3, kva: 0, v1: 6600, v2: 210 }));
 });
 
-test('母線電線は許容電流表（IV・FP 60℃/HIV・EM-LMFC 75℃）で選定', () => {
+test('母線電線は許容電流表（IV・FP 60℃/HIV・EM-IE・EM-LMFC 75℃）で選定', () => {
   const T = C.data.busCable.tables;
   const pick = (cur, temp) => { const c = C.selectCable(cur, T).find((x) => x.temp === temp); return c.sq === null ? null : c.sq + 'x' + c.parallel; };
   // 単相100kVA 210V → 476.2A
