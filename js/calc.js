@@ -137,17 +137,21 @@
     };
   }
 
-  // 電線規準の各表で選定。単条で収まらなければ並列条数を増やす
+  // 電線規準の各表で選定。1条で収まらなければ2条引き（1本の許容 ≥ 電流×0.6、JSIA）
+  // 2条でも収まらなければ電線は選定せず銅バーのみ
   function selectCable(current) {
-    return D.cable.tables.map(function (t) {
-      for (let n = 1; n <= D.cable.maxParallel; n++) {
+    const C = D.cable;
+    return C.tables.map(function (t) {
+      const base = { group: t.group, temp: t.temp, name: t.name, basis: t.basis };
+      for (let n = 1; n <= C.maxParallel; n++) {
+        const need = n === 1 ? current : current * C.parallelRatio;
         for (let i = 0; i < t.limits.length; i++) {
-          if (t.limits[i] * n >= current) {
-            return { group: t.group, temp: t.temp, name: t.name, basis: t.basis, sq: t.sizes[i], limit: t.limits[i], parallel: n };
+          if (t.limits[i] >= need) {
+            return Object.assign(base, { sq: t.sizes[i], limit: t.limits[i], parallel: n, need: need });
           }
         }
       }
-      return { group: t.group, temp: t.temp, name: t.name, basis: t.basis, sq: null };
+      return Object.assign(base, { sq: null });
     });
   }
 
@@ -218,16 +222,26 @@
   }
 
   // B種接地線(EB)
-  function selectEB(mode, kva, v2) {
+  // breakerA：変圧器低圧側を保護する配線用遮断器等の定格（表2.13.2 照合用）
+  function selectEB(mode, kva, v2, breakerA) {
     const phaseKva = mode === 'three' ? kva / 3 : (mode === 'scott' ? kva / 2 : kva);
     const col = v2 <= 150 ? 0 : (v2 <= 300 ? 1 : 2);
-    const t = D.eb.table;
-    for (let i = 0; i < t.length; i++) {
-      if (phaseKva <= t[i][col]) {
-        return { phaseKva: phaseKva, voltClass: ['100V級', '200V級', '400V級'][col], sq: t[i][3], verified: D.eb.verified };
+    const E = D.eb;
+    const res = { phaseKva: phaseKva, voltClass: ['100V級', '200V級', '400V級'][col], sq: null, verified: E.verified };
+    for (let i = 0; i < E.table.length; i++) {
+      if (phaseKva <= E.table[i][col]) { res.sq = E.table[i][3]; break; }
+    }
+    // 備考(2)：表2.13.2 の太さの方が太ければそちらを採用
+    res.breakerA = breakerA;
+    res.t2 = null;
+    if (breakerA > 0) {
+      for (let j = 0; j < E.table2.length; j++) {
+        if (breakerA <= E.table2[j][0]) { res.t2 = { limit: E.table2[j][0], label: E.table2[j][1], mm2: E.table2[j][2] }; break; }
       }
     }
-    return { phaseKva: phaseKva, voltClass: ['100V級', '200V級', '400V級'][col], sq: null, verified: D.eb.verified };
+    res.byT2 = !!(res.t2 && res.sq !== null && res.t2.mm2 > res.sq);
+    res.label = res.byT2 ? res.t2.label : (res.sq !== null ? res.sq + 'mm²' : null);
+    return res;
   }
 
   /*
@@ -285,7 +299,7 @@
       i1: i1, i2: i2, iscKa: iscKa,
       fuse: fuse, primaryBreaker: primaryBreaker, ct: ct, thr: thr, breaker: brk, branch: branch,
       conductor: { design: design, byBreaker: !!brk, cable: selectCable(design), busbar: selectBusbar(design) },
-      eb: hv ? selectEB(mode, kva, v2) : null
+      eb: hv ? selectEB(mode, kva, v2, design) : null
     };
   }
 

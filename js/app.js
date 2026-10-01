@@ -24,7 +24,7 @@
   const el = {
     kva: $('kva'), v1: $('v1'), v2: $('v2'), v1m: $('v1m'), v2m: $('v2m'), z: $('z'), isc: $('isc'),
     kva1: $('kva1'), kva1Field: $('kva1Field'),
-    chips: $('kvaChips'), results: $('results'), err: $('inputErr'), toast: $('toast')
+    kvaSel: $('kvaSel'), results: $('results'), err: $('inputErr'), toast: $('toast')
   };
   let lastText = '';
 
@@ -84,24 +84,11 @@
     buildVolt(el.v2, el.v2m, V2_OPTIONS[m], k2, V2_LABEL);
   }
 
-  function buildChips() {
+  // 容量 select（標準容量＋手入力）
+  function buildKva(keep) {
     const m = calcMode(uiMode());
-    const list = D.capacities[m];
-    el.chips.innerHTML = '';
-    list.forEach(function (k) {
-      const b = document.createElement('button');
-      b.type = 'button';
-      b.textContent = String(k);
-      b.dataset.kva = String(k);
-      b.addEventListener('click', function () { el.kva.value = String(k); update(); });
-      el.chips.appendChild(b);
-    });
-  }
-  function markChips() {
-    const v = Number(el.kva.value);
-    Array.prototype.forEach.call(el.chips.children, function (b) {
-      b.classList.toggle('on', Number(b.dataset.kva) === v);
-    });
+    const labels = m === 'single' ? { 750: '750（JIS外）', 1000: '1000（JIS外）' } : null;
+    buildVolt(el.kvaSel, el.kva, D.capacities[m], keep, labels);
   }
 
   function readInput() {
@@ -111,7 +98,7 @@
       mode: calcMode(m),
       trType: radio('trType') || 'oil',
       mainBreaker: radio('mainBrk') === 'yes',
-      kva: Number(el.kva.value),
+      kva: voltValue(el.kvaSel, el.kva),
       v1: voltValue(el.v1, el.v1m),
       v2: voltValue(el.v2, el.v2m),
       z: el.z.value === '' ? null : Number(el.z.value),
@@ -268,8 +255,9 @@
     let cb = '<p class="sub-note" style="margin-top:0">設計電流 ' + fmt(cd.design, cd.byBreaker ? 0 : 1) + 'A（' + (cd.byBreaker ? '主幹ブレーカー定格以上' : '二次定格電流') + '）</p><table class="res">';
     const cabTxts = [];
     cd.cable.forEach(function (c) {
-      const txt = c.sq ? c.sq + 'sq' + (c.parallel > 1 ? ' × ' + c.parallel + '条' : '') : '該当なし（銅バー推奨）';
-      const sub = c.sq ? c.name + '　' + c.basis + ' ' + c.limit + 'A以下' + (c.parallel > 1 ? ' × ' + c.parallel : '') : c.name;
+      const txt = c.sq ? c.sq + 'sq' + (c.parallel > 1 ? ' × ' + c.parallel + '条' : '') : '—（2条超のため銅バー）';
+      const sub = !c.sq ? c.name : c.name + '　' + c.basis + ' ' + c.limit + 'A以下' +
+        (c.parallel > 1 ? '（2条：1本 ≥ ' + fmt(c.need, 1) + 'A＝電流×' + D.cable.parallelRatio + '）' : '');
       cb += row(esc(c.group) + '<br>' + esc(c.temp), '<strong>' + esc(txt) + '</strong><br>' + note(esc(sub)));
       cabTxts.push(c.group + c.temp + ' ' + txt);
     });
@@ -283,11 +271,13 @@
     // EB（B種接地線）
     if (r.eb) {
       const e = r.eb;
-      const eb = '<div class="kv">' + kvItem('EB 接地線', e.sq ? e.sq : '個別検討', e.sq ? 'mm²' : '') +
+      const t2 = e.t2 ? '表2.13.2（遮断器等 ' + fmt(e.breakerA, 0) + 'A → ' + e.t2.limit + 'A以下）：' + e.t2.label + (e.byT2 ? ' ← 採用' : '') : '表2.13.2：' + fmt(e.breakerA, 0) + 'A は表の範囲外（1000A超）';
+      const eb = '<div class="kv">' + kvItem('EB 接地線', e.label ? esc(e.label) : '個別検討', '') +
         kvItem('一相分容量', fmt(e.phaseKva, 1), 'kVA') + '</div>' +
+        '<p class="sub-note">表2.13.1（' + e.voltClass + '）：' + (e.sq !== null ? e.sq + 'mm²' : '範囲外') + (e.byT2 ? '' : ' ← 採用') + '<br>' + esc(t2) + '</p>' +
         '<p class="sub-note">B種接地工事の接地線の太さ（' + e.voltClass + '・銅線）。一相分容量：三相=定格÷3、単相=定格、スコット=定格÷2。単相3線式は200V級を適用。<br>' + esc(D.eb.note) + '</p>';
       html += card('EB（B種接地線）サイズ', eb, e.verified === false);
-      t.push('EB: ' + (e.sq ? e.sq + 'mm²' : '個別検討'));
+      t.push('EB: ' + (e.label || '個別検討') + (e.byT2 ? '（表2.13.2による）' : ''));
     } else {
       html += card('EB（B種接地線）サイズ', '<p class="sub-note" style="margin:0">低圧/低圧変圧器のため B種接地工事は対象外です（混触防止・二次側接地は別途検討）。</p>');
     }
@@ -298,7 +288,6 @@
   }
 
   function update() {
-    markChips();
     const inp = readInput();
     el.kva1Field.hidden = !(inp.mode === 'three' && inp.v1 > 600);
     if (el.kva1Field.hidden) { inp.kva1 = null; }
@@ -313,7 +302,7 @@
       lastText = '';
     }
     save({
-      uiMode: inp.uiMode, trType: inp.trType, mainBreaker: inp.mainBreaker, kva: el.kva.value,
+      uiMode: inp.uiMode, trType: inp.trType, mainBreaker: inp.mainBreaker, kva: el.kvaSel.value === MANUAL ? (el.kva.value || MANUAL) : el.kvaSel.value,
       v1: el.v1.value === MANUAL ? (el.v1m.value || MANUAL) : el.v1.value,
       v2: el.v2.value === MANUAL ? (el.v2m.value || MANUAL) : el.v2.value,
       z: el.z.value, isc: el.isc.value, kva1: el.kva1.value
@@ -352,22 +341,21 @@
       setRadio('mode', V1_OPTIONS[s.uiMode] ? s.uiMode : 'three');
       setRadio('trType', s.trType === 'mold' ? 'mold' : 'oil');
       setRadio('mainBrk', s.mainBreaker ? 'yes' : 'no');
-      if (s.kva) { el.kva.value = s.kva; }
       el.z.value = s.z || '';
       el.isc.value = s.isc || '';
       el.kva1.value = s.kva1 || '';
     }
     buildVolts(s ? s.v1 : null, s ? s.v2 : 210);
-    buildChips();
+    buildKva(s && s.kva ? s.kva : 300);
 
     Array.prototype.forEach.call(document.querySelectorAll('input[name="mode"]'), function (r) {
-      r.addEventListener('change', function () { buildVolts(null, voltValue(el.v2, el.v2m)); buildChips(); update(); });
+      r.addEventListener('change', function () { buildVolts(null, voltValue(el.v2, el.v2m)); buildKva(voltValue(el.kvaSel, el.kva)); update(); });
     });
     Array.prototype.forEach.call(document.querySelectorAll('input[name="trType"], input[name="mainBrk"]'), function (r) {
       r.addEventListener('change', update);
     });
     [el.kva, el.z, el.isc, el.kva1, el.v1m, el.v2m].forEach(function (i) { i.addEventListener('input', update); });
-    [[el.v1, el.v1m], [el.v2, el.v2m]].forEach(function (p) {
+    [[el.kvaSel, el.kva], [el.v1, el.v1m], [el.v2, el.v2m]].forEach(function (p) {
       p[0].addEventListener('change', function () {
         p[1].hidden = p[0].value !== MANUAL;
         if (!p[1].hidden) { p[1].focus(); }
@@ -382,9 +370,9 @@
     $('resetBtn').addEventListener('click', function () {
       try { localStorage.removeItem(STORE_KEY); } catch (e) { /* noop */ }
       setRadio('mode', 'three'); setRadio('trType', 'oil'); setRadio('mainBrk', 'no');
-      el.kva.value = '300'; el.z.value = ''; el.isc.value = ''; el.kva1.value = '';
+      el.kva.value = ''; el.z.value = ''; el.isc.value = ''; el.kva1.value = '';
       el.v1m.value = ''; el.v2m.value = '';
-      buildVolts(null, 210); buildChips(); update();
+      buildVolts(null, 210); buildKva(300); update();
     });
 
     update();

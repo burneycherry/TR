@@ -111,6 +111,32 @@ test('スコット 低圧/低圧：一次側ブレーカー、LBS・EBなし', (
   });
 });
 
+test('EB：表2.13.2（遮断器定格）の方が太ければ採用', () => {
+  // 三相300kVA 210V：表2.13.1→38mm²、二次824.8A→表2.13.2 1000A以下→60mm²
+  const r = C.calculate({ mode: 'three', kva: 300, v1: 6600, v2: 210 });
+  assert.strictEqual(r.eb.sq, 38);
+  assert.strictEqual(r.eb.byT2, true);
+  assert.strictEqual(r.eb.label, '60mm²');
+  // 三相100kVA 210V：表2.13.1→14mm²、274.9A→表2.13.2 400A以下→22mm²
+  const r1 = C.calculate({ mode: 'three', kva: 100, v1: 6600, v2: 210 });
+  assert.strictEqual(r1.eb.label, '22mm²');
+  assert.strictEqual(r1.eb.byT2, true);
+  // 単相10kVA 210V：表2.13.1→5.5mm²、47.6A→表2.13.2 2.0mm（細い）→表2.13.1
+  const r0 = C.calculate({ mode: 'single', kva: 10, v1: 6600, v2: 210 });
+  assert.strictEqual(r0.eb.byT2, false);
+  assert.strictEqual(r0.eb.label, '5.5mm²');
+  // 遮断器定格 1000A 超は表2.13.2 範囲外 → 表2.13.1
+  const r2 = C.selectEB('three', 1000, 210, 2749);
+  assert.strictEqual(r2.t2, null);
+  assert.strictEqual(r2.label, '100mm²');
+});
+
+test('標準容量（日立ラインアップ／単相750・1000追加）', () => {
+  assert.deepStrictEqual(C.data.capacities.single.slice(-2), [750, 1000]);
+  assert.strictEqual(C.data.capacities.three[0], 20);
+  assert.strictEqual(C.data.capacities.three.slice(-1)[0], 2000);
+});
+
 test('EB サイズ', () => {
   assert.strictEqual(C.selectEB('three', 300, 210).sq, 38); // 一相100kVA・200V級
   assert.strictEqual(C.selectEB('three', 300, 440).sq, 22); // 一相100kVA・400V級
@@ -230,7 +256,10 @@ test('分岐ブレーカー：フレーム別、二次定格電流を流せる�
 
 test('電線・銅バーは設計電流以上', () => {
   const r = C.calculate({ phase: 3, kva: 750, v1: 6600, v2: 210, mainBreaker: true });
-  r.conductor.cable.forEach((c) => assert.ok(c.limit * c.parallel >= r.conductor.design, c.name));
+  r.conductor.cable.forEach((c) => {
+    if (c.sq === null) { return; }
+    assert.ok(c.parallel === 1 ? c.limit >= r.conductor.design : c.limit >= r.conductor.design * 0.6, c.name);
+  });
   assert.ok(r.conductor.busbar.ampacity >= r.conductor.design);
 });
 
@@ -240,7 +269,14 @@ test('電線規準・銅バー規準の転記値', () => {
   assert.deepStrictEqual(byName(225), ['100x1', '60x1']);
   assert.deepStrictEqual(byName(400), ['250x1', '150x1']);
   assert.deepStrictEqual(byName(100), ['38x1', '22x1']);
-  assert.deepStrictEqual(byName(1000), ['200x3', '200x2']);
+  // 2条：1本 ≥ 電流×0.6。500A → 60℃は 300A以下→150sq×2、75℃は1条200sq
+  assert.deepStrictEqual(byName(500), ['150x2', '200x1']);
+  // 1000A → 60℃は 600A>450A で電線不可（銅バーのみ）、75℃は 600A以下→250sq×2
+  const c1000 = C.selectCable(1000);
+  assert.strictEqual(c1000[0].sq, null);
+  assert.strictEqual(c1000[1].sq + 'x' + c1000[1].parallel, '250x2');
+  // 3条以上にはしない
+  C.selectCable(5000).forEach((c) => assert.strictEqual(c.sq, null));
   assert.strictEqual(C.selectBusbar(800).size, '10t×50');
   assert.strictEqual(C.selectBusbar(1250).size, '10t×100');
   assert.strictEqual(C.selectBusbar(4000).size, '15t×150×2');
