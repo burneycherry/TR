@@ -234,7 +234,9 @@
   // B種接地線(EB)：表2.13.1（一相分容量・電圧級）
   // 備考(2)：低圧側を保護する遮断器（分岐・主幹）の定格によっては表2.13.2 の方が太くなる
   // → 自動採用せず「ブレーカー定格による サイズアップ」の目安として表示（ユーザー指定）
-  function selectEB(mode, kva, v2) {
+  // maxA：付けうる最大のブレーカー定格（主幹ありは主幹定格、なしは二次定格電流以下の最大の分岐定格）
+  // これを超える帯は表示しない（二次電流を超えるブレーカーは付けない。ユーザー指定）
+  function selectEB(mode, kva, v2, maxA) {
     const phaseKva = mode === 'three' ? kva / 3 : (mode === 'scott' ? kva / 2 : kva);
     const col = v2 <= 150 ? 0 : (v2 <= 300 ? 1 : 2);
     const E = D.eb;
@@ -248,14 +250,29 @@
       res.baseMax = 0;
       for (let j = 0; j < E.table2.length; j++) {
         const t = E.table2[j];
+        const from = j > 0 ? E.table2[j - 1][0] : 0;
         if (t[2] > res.sq) {
-          res.sizeUp.push({ from: j > 0 ? E.table2[j - 1][0] : 0, to: t[0], label: t[1] });
+          if (maxA > 0 && from >= maxA) { break; }
+          res.sizeUp.push({ from: from, to: maxA > 0 ? Math.min(t[0], maxA) : t[0], label: t[1] });
         } else {
           res.baseMax = t[0];
         }
       }
     }
     return res;
+  }
+
+  // 二次定格電流以下で付けられる最大の分岐ブレーカー定格（各社・分岐対象フレーム）
+  function maxBranchRating(i2) {
+    let max = 0;
+    Object.keys(D.breaker.makers).forEach(function (k) {
+      D.breaker.makers[k].list.forEach(function (b) {
+        const af = b.branchAf || b.af;
+        if (af > D.breaker.branchMaxAf) { return; }
+        b.ratings.forEach(function (r) { if (r <= af && r <= i2 && r > max) { max = r; } });
+      });
+    });
+    return max;
   }
 
   /*
@@ -306,6 +323,9 @@
       });
     }
 
+    // EB サイズアップ判定用：主幹ありは主幹定格、なしは二次定格電流以下の最大分岐定格
+    const ebMax = brk ? design : (maxBranchRating(i2) || i2);
+
     return {
       input: { mode: mode, kva: kva, v1: v1, v2: v2, trType: trType, kva1: kva1 },
       hv: hv, circuits: circuits,
@@ -313,7 +333,7 @@
       i1: i1, i2: i2, iscKa: iscKa,
       fuse: fuse, primaryBreaker: primaryBreaker, ct: ct, thr: thr, breaker: brk, branch: branch,
       conductor: { design: design, byBreaker: !!brk, cable: selectCable(design, D.busCable.tables), busbar: selectBusbar(design) },
-      eb: selectEB(mode, kva, v2)
+      eb: Object.assign(selectEB(mode, kva, v2, ebMax), { maxA: ebMax, maxByMain: !!brk, i2: i2 })
     };
   }
 

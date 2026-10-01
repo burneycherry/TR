@@ -117,13 +117,27 @@ test('EB：表2.13.1 で選定し、ブレーカー定格によるサイズア�
   const r1 = C.calculate({ mode: 'three', kva: 100, v1: 6600, v2: 210, mainBreaker: true });
   assert.strictEqual(r1.eb.label, '14mm²'); // 主幹の有無で変えない
   assert.strictEqual(r1.eb.baseMax, 250);
-  assert.deepStrictEqual(r1.eb.sizeUp.map((u) => u.from + '-' + u.to + ':' + u.label),
-    ['250-400:22mm²', '400-600:38mm²', '600-1000:60mm²']);
+  // 主幹 300A → 250A超〜300A（22mm²）まで
+  assert.strictEqual(r1.eb.maxA, 300);
+  assert.deepStrictEqual(r1.eb.sizeUp.map((u) => u.from + '-' + u.to + ':' + u.label), ['250-300:22mm²']);
+  // 主幹なし：二次 274.9A 以下の最大分岐 250A → 14mm² のまま（サイズアップなし）
+  const rn = C.calculate({ mode: 'three', kva: 100, v1: 6600, v2: 210 });
+  assert.strictEqual(rn.eb.maxA, 250);
+  assert.strictEqual(rn.eb.sizeUp.length, 0);
+  assert.strictEqual(rn.eb.label, '14mm²');
+  // 主幹なし 三相200kVA 210V（549.9A）：表2.13.1 22mm²、最大分岐 500A → 400A超〜500A 38mm²
+  const r20 = C.calculate({ mode: 'three', kva: 200, v1: 6600, v2: 210 });
+  assert.strictEqual(r20.eb.label, '22mm²');
+  assert.strictEqual(r20.eb.maxA, 500);
+  assert.deepStrictEqual(r20.eb.sizeUp.map((u) => u.from + '-' + u.to + ':' + u.label), ['400-500:38mm²']);
+  assert.deepStrictEqual(C.selectEB('three', 100, 210).sizeUp.map((u) => u.label), ['22mm²', '38mm²', '60mm²']);
   // 単相10kVA：5.5mm²（100A以下）→ 150A以下 8mm² から
   const r0 = C.calculate({ mode: 'single', kva: 10, v1: 6600, v2: 210 });
   assert.strictEqual(r0.eb.label, '5.5mm²');
   assert.strictEqual(r0.eb.baseMax, 100);
-  assert.strictEqual(r0.eb.sizeUp[0].label, '8mm²');
+  // 二次 47.6A ≤ 100A → サイズアップなし
+  assert.strictEqual(r0.eb.sizeUp.length, 0);
+  assert.strictEqual(C.selectEB('single', 10, 210).sizeUp[0].label, '8mm²');
   // 三相1000kVA 210V：100mm² は表2.13.2 最大(60)より太い → サイズアップなし
   const r2 = C.selectEB('three', 1000, 210);
   assert.strictEqual(r2.label, '100mm²');

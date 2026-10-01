@@ -254,20 +254,27 @@
       let up = '';
       if (e.sq === null) {
         up = '';
-      } else if (e.sizeUp.length) {
-        up = '<p class="sub-note"><strong>分岐（主幹）ブレーカーのサイズによりサイズアップ</strong>（表2.13.2）<br>' +
-          'ブレーカー ' + e.baseMax + 'A以下：' + esc(e.label) + '（表2.13.1のまま）<br>' +
-          e.sizeUp.map(function (u) { return esc(u.from + 'A超〜' + u.to + 'A以下：' + u.label); }).join('<br>') +
-          '<br>1000A超：表2.13.2 範囲外（個別検討）</p>';
       } else {
-        up = '<p class="sub-note">表2.13.2（〜1000A）より太いため、ブレーカーのサイズによるサイズアップなし</p>';
+        const who = e.maxByMain ? '主幹ブレーカー ' + fmt(e.maxA, 0) + 'A'
+          : '分岐ブレーカー最大 ' + fmt(e.maxA, 0) + 'A（二次電流 ' + fmt(e.i2, 1) + 'A 以下）';
+        if (e.sizeUp.length) {
+          up = '<p class="sub-note"><strong>分岐（主幹）ブレーカーのサイズによりサイズアップ</strong>（表2.13.2）<br>' +
+            'ブレーカー ' + e.baseMax + 'A以下：' + esc(e.label) + '（表2.13.1のまま）<br>' +
+            e.sizeUp.map(function (u) { return esc(u.from + 'A超〜' + u.to + 'A：' + u.label); }).join('<br>') +
+            (e.maxA > 1000 ? '<br>1000A超：表2.13.2 範囲外（個別検討）' : '') +
+            '<br>' + note('想定する最大：' + esc(who)) + '</p>';
+        } else if (e.baseMax >= 1000) {
+          up = '<p class="sub-note">表2.13.2（〜1000A）より太いため、ブレーカーのサイズによるサイズアップなし</p>';
+        } else {
+          up = '<p class="sub-note">' + esc(who) + ' ≤ ' + e.baseMax + 'A のため、ブレーカーのサイズによるサイズアップなし</p>';
+        }
       }
       const eb = '<div class="kv">' + kvItem('EB 接地線', e.label ? esc(e.label) : '個別検討', '') +
         kvItem('一相分容量', fmt(e.phaseKva, 1), 'kVA') + '</div>' +
         '<p class="sub-note">表2.13.1（' + e.voltClass + '）：' + (e.sq !== null ? e.sq + 'mm²' : '範囲外') + '</p>' + up +
         '<p class="sub-note">B種接地工事の接地線の太さ（' + e.voltClass + '・銅線）。一相分容量：三相=定格÷3、単相=定格、スコット=定格÷2。単相3線式は200V級を適用。<br>' + esc(D.eb.note) + '</p>';
       html += card('EB（B種接地線）サイズ', eb, e.verified === false);
-      t.push('EB: ' + (e.label || '個別検討') + (e.sizeUp.length ? '（ブレーカー ' + e.baseMax + 'A超は表2.13.2でサイズアップ：' + e.sizeUp.map(function (u) { return '〜' + u.to + 'A ' + u.label; }).join('、') + '）' : ''));
+      t.push('EB: ' + (e.label || '個別検討') + (e.sizeUp.length ? '（ブレーカー ' + e.baseMax + 'A超は表2.13.2でサイズアップ：' + e.sizeUp.map(function (u) { return '〜' + u.to + 'A ' + u.label; }).join('、') + (e.maxByMain ? '・主幹' : '')  + '）' : ''));
     }
 
     // 主幹ブレーカー（必要時のみ）
