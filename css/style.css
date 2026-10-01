@@ -109,6 +109,10 @@ input:focus, select:focus { outline: 2px solid #4a90d9; outline-offset: 0; borde
 .hint { margin: 0; font-size: 13px; color: #c0392b; min-height: 0; }
 
 /* 結果 */
+.wd { display: block; width: 100%; max-width: 420px; height: auto; margin: 0 auto; color: #1f4e79; }
+.wd line { stroke: currentColor; stroke-width: 2; stroke-linecap: round; }
+.wd .f { fill: currentColor; }
+.wd text { fill: currentColor; font-size: 11px; }
 .kv { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
 .kv .item { background: #f6f8fb; border-radius: 8px; padding: 8px 10px; min-width: 0; }
 .kv .k { font-size: 12px; color: #5b6878; }
@@ -189,6 +193,7 @@ table.res tr:last-child th, table.res tr:last-child td { border-bottom: none; }
   .chips button { background: #0f1720; border-color: #34414f; color: #e4e9ef; }
   .chips button.on { background: #2c6aa8; border-color: #2c6aa8; }
   .kv .item { background: #0f1720; }
+  .wd { color: #8cbcf0; }
   .kv .v { color: #e4e9ef; }
   table.res th, table.res td { border-bottom-color: #2a3542; }
   .warn { background: #3a2a10; color: #f5c77e; }

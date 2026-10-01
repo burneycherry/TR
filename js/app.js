@@ -159,6 +159,86 @@
     return h;
   }
 
+  // 結線図（代表例）：三菱 油入変圧器カタログ L-10034-H（仕様 p.9・スコット p.27・ダブルパワー p.23）、日立 灯動共用 製品ページ
+  function wiring(r, inp) {
+    const R = 32;
+    const out = [];
+    function ln(x1, y1, x2, y2) { out.push('<line x1="' + x1 + '" y1="' + y1 + '" x2="' + x2 + '" y2="' + y2 + '"/>'); }
+    function dot(x, y) { out.push('<circle cx="' + x + '" cy="' + y + '" r="2.6" class="f"/>'); }
+    function tx(x, y, t, a) { out.push('<text x="' + x + '" y="' + y + '" text-anchor="' + (a || 'middle') + '">' + esc(t) + '</text>'); }
+    function gnd(x, y) {
+      ln(x, y, x, 150); ln(x - 9, 150, x + 9, 150); ln(x - 6, 154, x + 6, 154); ln(x - 3, 158, x + 3, 158);
+      tx(x + 13, 157, 'B種接地', 'start');
+    }
+    function tri(cx, cy) { return { a: [cx, cy - R], b: [cx - R * 0.866, cy + R / 2], c: [cx + R * 0.866, cy + R / 2] }; }
+    function star(cx, cy, n) {
+      const t = tri(cx, cy);
+      ln(cx, cy, t.a[0], t.a[1]); ln(cx, cy, t.b[0], t.b[1]); ln(cx, cy, t.c[0], t.c[1]);
+      tx(t.a[0], t.a[1] - 5, n[0]); tx(t.b[0] - 6, t.b[1] + 12, n[1]); tx(t.c[0] + 6, t.c[1] + 12, n[2]);
+      return t;
+    }
+    function delta(cx, cy, n) {
+      const t = tri(cx, cy);
+      ln(t.a[0], t.a[1], t.b[0], t.b[1]); ln(t.b[0], t.b[1], t.c[0], t.c[1]); ln(t.c[0], t.c[1], t.a[0], t.a[1]);
+      tx(t.a[0], t.a[1] - 5, n[0]); tx(t.b[0] - 6, t.b[1] + 12, n[1]); tx(t.c[0] + 6, t.c[1] + 12, n[2]);
+      return t;
+    }
+    const m = r.input.mode;
+    const v1 = r.input.v1;
+    const v2 = r.input.v2;
+    const P = 62, S = 196, Y0 = 72;
+    let name = '';
+    let outs = [];
+    if (m === 'single') {
+      ln(P, Y0 - R, P, Y0 + R); dot(P, Y0 - R); dot(P, Y0 + R); tx(P - 10, Y0 - R + 4, 'U', 'end'); tx(P - 10, Y0 + R + 4, 'V', 'end');
+      ln(S, Y0 - R, S, Y0 + R); dot(S, Y0 - R); dot(S, Y0); dot(S, Y0 + R);
+      tx(S - 8, Y0 - R + 4, 'u', 'end'); tx(S - 8, Y0 + 4, 'o', 'end'); tx(S - 8, Y0 + R + 4, 'v', 'end');
+      ln(S, Y0, S + 22, Y0); gnd(S + 22, Y0);
+      name = '単相 単三（中性点 o 接地）';
+      outs = ['単相3線', v2 + '/' + (v2 / 2) + 'V'];
+    } else if (m === 'scott') {
+      const yb = Y0 + 14;
+      ln(P - R, yb, P + R, yb); ln(P, yb, P, yb - 1.6 * R); dot(P - R, yb); dot(P + R, yb); dot(P, yb - 1.6 * R);
+      tx(P - R, yb + 13, 'U'); tx(P + R, yb + 13, 'W'); tx(P, yb - 1.6 * R - 5, 'V');
+      tx(P, yb + 26, 'M座(U-W)・T座(V)');
+      [S - 16, S + 24].forEach(function (x, i) {
+        ln(x, Y0 - R, x, Y0 + R); dot(x, Y0 - R); dot(x, Y0); dot(x, Y0 + R);
+        tx(x, Y0 - R - 6, i === 0 ? 'M座' : 'T座');
+        ln(x, Y0, x + 10, Y0); ln(x + 10, Y0, x + 10, Y0 + R + 14);
+      });
+      ln(S - 6, Y0 + R + 14, S + 34, Y0 + R + 14); gnd(S + 14, Y0 + R + 14);
+      name = 'スコット結線（二次 M座・T座 各単相3線、各中点接地）';
+      outs = ['単相3線×2', v2 + '/' + (v2 / 2) + 'V'];
+    } else if (m === 'todo') {
+      const t = star(P, Y0, ['U', 'W', 'V']); dot(t.a[0], t.a[1]); dot(t.b[0], t.b[1]); dot(t.c[0], t.c[1]);
+      const u = [S + 16, Y0 - R], v = [S + 16, Y0 + R], w = [S - 30, Y0], o = [S + 16, Y0];
+      ln(w[0], w[1], u[0], u[1]); ln(u[0], u[1], v[0], v[1]); ln(v[0], v[1], w[0], w[1]);
+      [u, v, w, o].forEach(function (q) { dot(q[0], q[1]); });
+      tx(u[0] + 8, u[1] + 4, 'u', 'start'); tx(v[0] + 8, v[1] + 4, 'v', 'start'); tx(w[0] - 7, w[1] + 4, 'w', 'end'); tx(o[0] - 5, o[1] - 4, 'o', 'end');
+      ln(o[0], o[1], o[0] + 28, o[1]); gnd(o[0] + 28, o[1]);
+      name = 'Y-Δ 灯動共用（二次Δの一相中点 o を引出し・o 接地）';
+      outs = ['三相 u-v-w', v2 + 'V', '単相 u-o-v', v2 + '-' + (v2 / 2) + 'V'];
+    } else if (v2 > 300) {
+      const t = delta(P, Y0, ['U', 'W', 'V']); dot(t.a[0], t.a[1]); dot(t.b[0], t.b[1]); dot(t.c[0], t.c[1]);
+      const t2 = star(S, Y0, ['u', 'w', 'v']); dot(t2.a[0], t2.a[1]); dot(t2.b[0], t2.b[1]); dot(t2.c[0], t2.c[1]); dot(S, Y0);
+      tx(S + 8, Y0 - 2, 'N', 'start');
+      ln(S, Y0, S, Y0 + R + 10); ln(S, Y0 + R + 10, S + 30, Y0 + R + 10); gnd(S + 30, Y0 + R + 10);
+      name = 'Δ-Y（Dyn11）中性点 N 接地';
+      outs = inp.uiMode === 'three4w' ? ['三相4線', v2 + '/' + Math.round(v2 / Math.sqrt(3)) + 'V'] : ['三相 ' + v2 + 'V'];
+    } else {
+      const t = star(P, Y0, ['U', 'W', 'V']); dot(t.a[0], t.a[1]); dot(t.b[0], t.b[1]); dot(t.c[0], t.c[1]);
+      const t2 = delta(S, Y0, ['u', 'w', 'v']); dot(t2.a[0], t2.a[1]); dot(t2.b[0], t2.b[1]); dot(t2.c[0], t2.c[1]);
+      ln(t2.c[0], t2.c[1], t2.c[0] + 24, t2.c[1]); gnd(t2.c[0] + 24, t2.c[1]);
+      name = 'Y-Δ（Yd1）二次一端接地 ※Δ-Δ（Dd0）の機種もあり';
+      outs = ['三相3線 ' + v2 + 'V'];
+    }
+    tx(P, 14, '一次 ' + v1 + 'V');
+    tx(S, 14, '二次');
+    outs.forEach(function (o2, i) { tx(262, Y0 - 6 - (outs.length > 2 ? 16 : 0) + i * 16, o2, 'start'); });
+    return '<svg class="wd" viewBox="0 0 340 168" role="img" aria-label="結線図">' + out.join('') + '</svg>' +
+      '<p class="sub-note">' + esc(name) + '。結線は代表例（三菱 油入変圧器カタログ L-10034-H・日立 灯動共用 製品ページ）。実機は銘板・仕様書で確認。</p>';
+  }
+
   function render(r, inp) {
     const n = r.circuits;
     const per = n > 1 ? '（各座・' + n + '回路）' : '';
@@ -173,6 +253,9 @@
     const v2Lbl = (V2_LABELS[inp.uiMode] && V2_LABELS[inp.uiMode][r.input.v2]) || String(r.input.v2);
     const kvaLbl = r.todo ? r.input.kva + 'kVA（配分 三相' + r.input.kva3 + '＋単相' + r.input.kva1 + 'kVA、' + r.input.freq + 'Hz）' : r.input.kva + 'kVA';
     t.push('【変圧器】' + MODE_LABEL[inp.uiMode] + ' ' + (r.input.trType === 'mold' ? 'モールド ' : '油入 ') + kvaLbl + ' ' + r.input.v1 + 'V/' + v2Lbl.split(' ')[0] + 'V');
+
+    // 結線図
+    html += card('結線図', wiring(r, inp));
 
     // 定格電流
     if (r.todo) {
@@ -451,10 +534,24 @@
     buildKva(s && s.kva ? s.kva : 300);
 
     Array.prototype.forEach.call(document.querySelectorAll('input[name="mode"]'), function (r) {
-      r.addEventListener('change', function () { buildVolts(null, voltValue(el.v2, el.v2m)); buildKva(voltValue(el.kvaSel, el.kva)); update(); });
+      r.addEventListener('change', function () {
+        // 新しいモードの候補にない値は引き継がず、そのモードの既定値にする
+        const v2 = voltValue(el.v2, el.v2m);
+        const kva = voltValue(el.kvaSel, el.kva);
+        const m = uiMode();
+        const kvaList = m === 'todo' ? D.todo.makers[radio('todoMaker') === 'mitsubishi' ? 'mitsubishi' : 'hitachi'].rows.map(function (x) { return x[0]; }) : D.capacities[calcMode(m)];
+        buildVolts(null, V2_OPTIONS[m].indexOf(v2) >= 0 ? v2 : null);
+        buildKva(kvaList.indexOf(kva) >= 0 ? kva : (kvaList.indexOf(300) >= 0 ? 300 : kvaList[Math.floor(kvaList.length / 2)]));
+        update();
+      });
     });
     Array.prototype.forEach.call(document.querySelectorAll('input[name="todoMaker"]'), function (r) {
-      r.addEventListener('change', function () { buildKva(voltValue(el.kvaSel, el.kva)); update(); });
+      r.addEventListener('change', function () {
+        const kva = voltValue(el.kvaSel, el.kva);
+        const list = D.todo.makers[radio('todoMaker') === 'mitsubishi' ? 'mitsubishi' : 'hitachi'].rows.map(function (x) { return x[0]; });
+        buildKva(list.indexOf(kva) >= 0 ? kva : list[Math.floor(list.length / 2)]);
+        update();
+      });
     });
     Array.prototype.forEach.call(document.querySelectorAll('input[name="trType"], input[name="mainBrk"], input[name="freq"], input[name="todoSide"]'), function (r) {
       r.addEventListener('change', update);
