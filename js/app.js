@@ -269,7 +269,9 @@
           up = '<p class="sub-note">' + esc(who) + ' ≤ ' + e.baseMax + 'A のため、ブレーカーのサイズによるサイズアップなし</p>';
         }
       }
-      const eb = '<div class="kv">' + kvItem('EB 接地線', e.label ? esc(e.label) : '個別検討', '') +
+      const upTxt = e.sizeUp.map(function (u) { return u.from + 'A超' + (u.to > u.from ? '〜' + u.to + 'A' : '') + ' → ' + u.label; });
+      const upLine = upTxt.length ? '<span class="up">⚠ サイズアップ有<br>' + upTxt.map(esc).join('<br>') + '</span>' : '';
+      const eb = '<div class="kv">' + kvItem('EB 接地線', (e.label ? esc(e.label) : '個別検討') + upLine, '') +
         kvItem('一相分容量', fmt(e.phaseKva, 1), 'kVA') + '</div>' +
         '<p class="sub-note">表2.13.1（' + e.voltClass + '）：' + (e.sq !== null ? e.sq + 'mm²' : '範囲外') + '</p>' + up +
         '<p class="sub-note">B種接地工事の接地線の太さ（' + e.voltClass + '・銅線）。一相分容量：三相=定格÷3、単相=定格、スコット=定格÷2。単相3線式は200V級を適用。<br>' + esc(D.eb.note) + '</p>';
