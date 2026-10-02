@@ -685,3 +685,30 @@ test('単相2線 210V は JIS 単三変圧器の u-v 使用（JIS 内）、105V 
   const b = C.calculate({ mode: 'single', kva: 50, v1: 6600, v2: 105, wires: 2 });
   assert.strictEqual(b.winding.std, false);
 });
+
+test('異容量V-V結線：日本電気技術者協会 第2表・第1表の計算例と照合', () => {
+  // 第2表（三相を許容限度まで、力率同一）[Ta, Tb, P1, P3]
+  [[10, 5, 5.4, 8.7], [100, 50, 53.5, 86.6], [75, 30, 47.5, 52], [250, 150, 108.6, 259.8], [300, 250, 56.2, 433]].forEach(([ta, tb, p1, p3]) => {
+    const s = C.vvxSplit(ta, tb, 'three', null, null, null, true);
+    near(s.single, p1, 0.05); near(s.three, p3, 0.05);
+  });
+  // 第1表 計算例：P1=10kVA cosθ1=1、P3=30kVA cosθ3=0.866 → 進み Ta=23.9、遅れ 共用=27.3、専用=17.3
+  const need = (lead) => {
+    const t1 = 0, t3 = Math.acos(0.866);
+    const c = Math.cos(Math.PI / 6 + (lead ? t3 - t1 : t1 - t3));
+    return Math.sqrt(100 + 900 / 3 + 2 / Math.sqrt(3) * 10 * 30 * c);
+  };
+  near(need(true), 23.9, 0.05); near(need(false), 27.3, 0.05); near(30 / Math.sqrt(3), 17.3, 0.05);
+  // vvxSplit 逆算：共用 23.9・専用 17.3、三相 30kVA を入れると単相 ≒10kVA（進み）
+  const back = C.vvxSplit(need(true), 30 / Math.sqrt(3), 'three', 30, 1, 0.866, true);
+  near(back.single, 10, 0.1);
+  // 計算：EB 一相分容量は大きい方、各回路の短絡電流は端子短絡の大きい方
+  const r = C.calculate({ mode: 'three', uiMode: 'three', conn: 'Vvx', kva: 100, kvaB: 50, v1: 6600, v2: 210 });
+  assert.strictEqual(r.eb.phaseKva, 100);
+  near(r.todo.three.i2, 86.6 * 1000 / (Math.sqrt(3) * 210), 0.1);
+  near(r.todo.single.i2, 53.5 * 1000 / 210, 0.1);
+  assert.strictEqual(r.todo.three.iscKa, Math.max(r.sc[0].isc, r.sc[1].isc));
+  // 割合指定：三相 50%
+  const pct = C.vvxSplit(100, 50, 'pct', 50, null, null, true);
+  near(pct.three, 43.3, 0.05);
+});

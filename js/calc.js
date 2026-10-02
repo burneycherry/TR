@@ -447,6 +447,106 @@
   // 灯動共用変圧器：一次（LBS・一次電流）は定格容量の三相変圧器として、
   // 二次は負荷配分曲線上の配分（三相側／単相側の一方を入力、未入力は折れ点）で各回路を選定（ユーザー指定）
   // %Z は日立特性表（周波数別）。EB の一相分容量＝単相＋三相÷3
+  // 異容量V-V結線（日本電気技術者協会「単相変圧器による異容量V‐V結線方式の特徴」第1表・(3)(4)式）
+  // 共用 Tk（単相＋三相）・専用 Ts（三相のみ）。相順 a-b-c、進み接続＝単相負荷が a-b 間（共用 a-b）、遅れ接続＝b-c 間
+  //   共用 Tk = √(P1² + P3²/3 + (2/√3)·P1·P3·cos(30° + φ))、φ = 進み θ3−θ1 ／ 遅れ θ1−θ3、専用 Ts = P3/√3
+  // side：'three'＝三相 P3 を入力、'single'＝単相 P1 を入力、'pct'＝三相を最大（√3·Ts）の % で指定。空欄は三相最大（第2表の条件）
+  function vvxSplit(tk, ts, side, value, pf1, pf3, lead) {
+    const p1f = pf1 > 0 && pf1 <= 1 ? pf1 : 1;
+    const p3f = pf3 > 0 && pf3 <= 1 ? pf3 : p1f; // 未入力は単相と同じ力率（(3)(4)式の前提）
+    const t1 = Math.acos(p1f);
+    const t3 = Math.acos(p3f);
+    const phi = lead === false ? t1 - t3 : t3 - t1;
+    const c = Math.cos(Math.PI / 6 + phi);
+    const s3 = Math.sqrt(3);
+    const p3max = s3 * Math.min(ts, tk);
+    const p1From3 = function (p3) { return -p3 * c / s3 + Math.sqrt(Math.max(0, tk * tk - p3 * p3 * (1 - c * c) / 3)); };
+    let p3;
+    let p1;
+    const v = value === null || value === undefined || value === '' ? null : Number(value);
+    if (side === 'single' && v !== null) {
+      if (!(v >= 0) || v > tk) { return { error: '単相側は共用変圧器の容量 ' + tk + 'kVA 以下にしてください。' }; }
+      p1 = v;
+      const x = -p1 * c + Math.sqrt(Math.max(0, tk * tk - p1 * p1 * (1 - c * c)));
+      p3 = s3 * Math.max(0, Math.min(x, ts));
+    } else {
+      if (side === 'pct' && v !== null) {
+        if (!(v >= 0) || v > 100) { return { error: '三相の割合は 0〜100% にしてください。' }; }
+        p3 = p3max * v / 100;
+      } else if (side === 'three' && v !== null) {
+        if (!(v >= 0) || v > p3max + 1e-9) { return { error: '三相側は最大 ' + (Math.round(p3max * 10) / 10) + 'kVA（√3×専用 ' + ts + 'kVA）です。' }; }
+        p3 = v;
+      } else {
+        p3 = p3max;
+      }
+      p1 = Math.max(0, p1From3(p3));
+    }
+    const r1 = function (x) { return Math.round(x * 10) / 10; };
+    const needK = Math.sqrt(p1 * p1 + p3 * p3 / 3 + 2 / s3 * p1 * p3 * c);
+    return {
+      three: r1(p3), single: r1(p1), p3max: r1(p3max), pct: p3max > 0 ? p3 / p3max * 100 : 0,
+      needK: needK, needS: p3 / s3, cosTerm: c, pf1: p1f, pf3: p3f, lead: lead !== false, side: side
+    };
+  }
+  function calculateVvx(input) {
+    const tk = Number(input.kva);
+    const ts = Number(input.kvaB);
+    const v1 = Number(input.v1);
+    const v2 = Number(input.v2);
+    if (!(tk > 0) || !(ts > 0) || !(v1 > 0) || !(v2 > 0)) { throw new Error('共用・専用変圧器の容量と電圧を正しく入力してください。'); }
+    const lead = input.vvxLead !== false;
+    const split = vvxSplit(tk, ts, input.vvxSide, input.vvxLoad, Number(input.pf1), Number(input.pf3), lead);
+    if (split.error) { throw new Error(split.error); }
+    if (!(split.three > 0) || !(split.single > 0)) {
+      throw new Error('三相側・単相側とも 0 より大きい配分にしてください（片側のみの場合は同容量V結線や三相・単相を選択）。');
+    }
+    const trType = input.trType === 'mold' ? 'mold' : 'oil';
+    const zIn = Number(input.z) > 0 ? Number(input.z) : 0;
+    const iscIn = Number(input.iscKa) > 0 ? Number(input.iscKa) : 0;
+    // 変圧器ごとの端子短絡電流（単相 %Z）。両回路には大きい方を使う（安全側）
+    const sc = [tk, ts].map(function (k) {
+      const zt = zIn || defaultZ('single', k, v2, trType, input.freq);
+      const zs = sourceZ('single', k, v1, iscIn);
+      return { kva: k, tr: zt, src: zs, total: zt + zs, isc: k * 1000 / v2 * 100 / (zt + zs) / 1000 };
+    });
+    const gov = sc[0].isc >= sc[1].isc ? sc[0] : sc[1];
+    // 一次側・LBS・タップは共用変圧器（単相）で選定
+    const base = calculate(Object.assign({}, input, { mode: 'single', conn: '', kva: tk, kva1: 0 }));
+    if (base.fuse) { base.fuse.warn.push('V結線用の選定表はありません。共用変圧器 単相 ' + tk + 'kVA の行を参考表示しています（専用 ' + ts + 'kVA と1組の LBS で開閉する場合はメーカーに確認）。'); }
+    const sub = Object.assign({}, input, { conn: '', kva1: 0, iscBasis: 'calc', iscOverride: gov.isc, z: gov.tr });
+    const c3 = calculate(Object.assign({}, sub, { mode: 'three', kva: split.three }));
+    const c1 = calculate(Object.assign({}, sub, { mode: 'single', kva: split.single }));
+    [c3, c1].forEach(function (c) { c.z = { tr: gov.tr, trIsDefault: !zIn, src: gov.src, total: gov.total }; });
+    const maxA = Math.max(c3.eb.maxA, c1.eb.maxA);
+    // EB 一相分容量：異容量V結線は大きい方の単相変圧器の定格容量
+    const eb = Object.assign(selectEB('single', Math.max(tk, ts), v2, maxA), { maxA: maxA, maxByMain: c3.eb.maxByMain, i2: c3.eb.maxA >= c1.eb.maxA ? c3.i2 : c1.i2, vvx: true });
+    // 結線の JIS 判定：単相変圧器（表3 単相容量・表5 210-105V）
+    const J = D.jisTr;
+    const lv = !(v1 > LV_MAX);
+    const auto = jisWinding('three', tk, v1, v2, input.freq, {}).auto;
+    const notes = [];
+    if (!lv) {
+      if (!(v1 >= J.v1Range[0] && v1 <= J.v1Range[1])) { notes.push('JIS C 4304/4306 は 6kV 配電用です（一次 ' + v1 + 'V は対象外）。'); }
+      [tk, ts].forEach(function (k) { if (J.capacities.single.indexOf(k) < 0) { notes.push('容量 ' + k + 'kVA は JIS 表3 の単相定格容量外です。'); } });
+      if (v2 !== 210) { notes.push('JIS 表5 の単相定格二次電圧は 210-105V です。'); }
+    }
+    const warn = [];
+    if (tk < ts) { warn.push('共用変圧器は専用変圧器以上の容量とするのが一般的です（参考資料の第2表は共用＞専用）。'); }
+    warn.push('V結線は三相電圧が不平衡になるおそれがあります。');
+    const s3 = Math.sqrt(3);
+    return Object.assign(base, {
+      input: Object.assign({}, base.input, { mode: 'three', kva: tk, kvaB: ts, kva3: split.three, kva1: split.single, vvx: true, lead: lead }),
+      i1: tk * 1000 / v1, i1b: ts * 1000 / v1,
+      iscKa: gov.isc, sc: sc,
+      winding: { codes: ['Vvx'], auto: auto, selected: true, lv: lv, notes: notes, std: !lv && notes.length === 0, lead: lead },
+      todo: {
+        three: c3, single: c1, split: split, name: '異容量V-V結線', vvx: true,
+        source: '日本電気技術者協会「単相変圧器による異容量V‐V結線方式の特徴」第1表・(3)(4)式', warn: warn
+      },
+      vvx: { tk: tk, ts: ts, split: split, s3: s3 },
+      eb: eb
+    });
+  }
   function calculateTodo(input) {
     const k = Number(input.kva);
     const maker = todoMaker(input.todoMaker);
@@ -490,9 +590,9 @@
   // JIS の対象は 6kV 配電用（v1Range）。それ以外の高圧は同じ結線を参考表示、低圧/低圧は代表例（二次 300V 以下 Yd1、超 Dyn11）
   // 表19 で2通りある容量（750・1000kVA）は日立標準（ST-156）の結線を先頭にする
   // opts.wires：単相 2|3（既定 3）、opts.conn：三相3線で選択した結線（空＝代表例）。JIS 外の選択は注意を付ける
-  const CONN_NAMES = { Yy0: 'Y-Y（Yy0）', Yd1: 'Y-Δ（Yd1）', Dd0: 'Δ-Δ（Dd0）', Dyn11: 'Δ-Y（Dyn11）', Yyn0: 'Y-Y 中性点付き（Yyn0）', Vv0: 'V-V（単相変圧器2台）' };
+  const CONN_NAMES = { Yy0: 'Y-Y（Yy0）', Yd1: 'Y-Δ（Yd1）', Dd0: 'Δ-Δ（Dd0）', Dyn11: 'Δ-Y（Dyn11）', Yyn0: 'Y-Y 中性点付き（Yyn0）', Vv0: 'V-V（単相変圧器2台）', Vvx: 'V-V 異容量（灯動共用）' };
   // 選べる結線：三相3線／三相4線（中性点が必要）
-  const CONN_OPTIONS = { three: ['Yy0', 'Yd1', 'Dd0', 'Dyn11', 'Vv0'], three4w: ['Dyn11', 'Yyn0'] };
+  const CONN_OPTIONS = { three: ['Yy0', 'Yd1', 'Dd0', 'Dyn11', 'Vv0', 'Vvx'], three4w: ['Dyn11', 'Yyn0'] };
   function jisWinding(mode, kva, v1, v2, freq, opts) {
     const o = opts || {};
     const J = D.jisTr;
@@ -596,6 +696,7 @@
 
   function calculate(input) {
     if (input.mode === 'todo') { return calculateTodo(input); }
+    if (input.mode === 'three' && input.conn === 'Vvx' && input.uiMode !== 'three4w') { return calculateVvx(input); }
     const mode = normMode(input);
     const kva = Number(input.kva);
     const v1 = Number(input.v1);
@@ -620,7 +721,8 @@
     const i1 = ratedCurrent(um === 'single' ? 1 : 3, kva, v1);
     // スコットは M座・T座 各 kVA/2 の単相回路
     const i2 = um === 'three' ? ratedCurrent(3, kva, v2) : ratedCurrent(1, kva / circuits, v2);
-    const iscKa = i2 * 100 / zTotal / 1000;
+    // iscOverride：異容量V結線の各回路は変圧器端子短絡の値を使う
+    const iscKa = Number(input.iscOverride) > 0 ? Number(input.iscOverride) : i2 * 100 / zTotal / 1000;
 
     const fuse = hv ? selectFuse(um, kva, v1, trType, kva1) : null;
     if (fuse && vv) { fuse.warn.push('V結線用の選定表はありません。単相 ' + kva + 'kVA 1台分の行を参考表示しています（2台を1組の LBS で開閉する場合はメーカーに確認）。'); }
@@ -670,7 +772,7 @@
 
   const api = {
     calculate: calculate, ratedCurrent: ratedCurrent, defaultZ: defaultZ, sourceZ: sourceZ,
-    pickAtLeast: pickAtLeast, todoRow: todoRow, selectPrimaryMitsubishi: selectPrimaryMitsubishi, selectPrimaryFuji: selectPrimaryFuji, jisWinding: jisWinding, CONN_NAMES: CONN_NAMES, CONN_OPTIONS: CONN_OPTIONS, tapTable: tapTable, jisRow: jisRow, guideRow: guideRow, jisAt: jisAt, todoSplit: todoSplit, selectCable: selectCable, selectBusbar: selectBusbar,
+    pickAtLeast: pickAtLeast, todoRow: todoRow, selectPrimaryMitsubishi: selectPrimaryMitsubishi, selectPrimaryFuji: selectPrimaryFuji, vvxSplit: vvxSplit, jisWinding: jisWinding, CONN_NAMES: CONN_NAMES, CONN_OPTIONS: CONN_OPTIONS, tapTable: tapTable, jisRow: jisRow, guideRow: guideRow, jisAt: jisAt, todoSplit: todoSplit, selectCable: selectCable, selectBusbar: selectBusbar,
     selectBreaker: selectBreaker, selectBranch: selectBranch, selectCT: selectCT, selectTHR: selectTHR, selectFuse: selectFuse,
     selectEB: selectEB, data: D
   };

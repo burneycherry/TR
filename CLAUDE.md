@@ -66,8 +66,9 @@ script 読み込み順は `data.js → calc.js → app.js`（ES Modules 不使�
   - MCCB（`list`）と ACB（`acb`）を別々に選定。リスト順（小フレーム→下位グレード）の最初の適合 → **表は必ずその順**
   - 800A 以上または MCCB 該当なしのとき ACB も表示
 - **結線図**（`wiring()`、インライン SVG・`currentColor`）：**ベクトル図なので角度が重要**（`pol()`、二次は位相変位ぶん回転）。三相は **JIS C 4304/4306 表19・表20**（油入・モールド共通、ユーザー提供画像。`calc.jisWinding` → `r.winding`）：向きは JIS 表20（一次 U 210°・V 90°・W −30°）。二次210V：≤50kVA Yy0／≤500 Yd1（二次 u 180°・v 60°・w −60°）／750・1000 Dd0 又は Yd1（**日立標準 Δ/Δ を先頭**、`jisTr.hitachi` ST-156 p.7）／1500・2000 Dd0、二次>300V・三相4線は Dyn11（u 240°・v 120°・w 0°）N接地、他は v 一端接地（B種は v 端子＝ユーザー確認済み）。JIS は **6kV 配電用**（一次 6000〜7200V 以外の高圧は参考表示）。JIS 標準外（容量・二次電圧・420V=50Hz/440V=60Hz 不一致・Δ-Y が1500/2000以外）は注意表示。Δ-Y 75〜1000kVA は JEM 1520/1521 準拠の日立標準品（`jem`）と表示。低圧/低圧は JIS 対象外＝従来の代表例（≤300V Yd1・超 Dyn11）。単相=単三（表18）中性点接地／スコット=一次 T結線（V—U 水平・W 垂直）、二次 u2-02-v2 垂直と v1-01-u1 水平の直交、**B種接地は中点 o1・o2 から**（ユーザー指定、図のラベルも o1・o2）／灯動=Yd1（一次 U 90° のメーカー図の向き）・一相中点 o 接地。出典：三菱 L-10034-H p.9・23・27、日立 灯動共用ページ。代表例と明記
-- **結線の選択**（結線図カード内の `#connSel`、`conn`・保存あり、`calc.CONN_OPTIONS`）：**既定は代表例**（上記の自動判定）。三相3線＝Yy0/Yd1/Dd0/Dyn11/Vv0、三相4線＝Dyn11/Yyn0。代表例（JIS 表19/表6 の許容）に無いものは選択肢に「（JIS外）」・注意表示（`jisWinding` の `auto`/`selected`）。低圧/低圧は JIS 判定なし。灯動は `winding: null`（JIS 対象外）
+- **結線の選択**（結線図カード内の `#connSel`、`conn`・保存あり、`calc.CONN_OPTIONS`）：**既定は代表例**（上記の自動判定）。三相3線＝Yy0/Yd1/Dd0/Dyn11/Vv0/Vvx、三相4線＝Dyn11/Yyn0。代表例（JIS 表19/表6 の許容）に無いものは選択肢に「（JIS外）」・注意表示（`jisWinding` の `auto`/`selected`）。低圧/低圧は JIS 判定なし。灯動は `winding: null`（JIS 対象外）
 - **V結線**（`Vv0`、三相3線の結線選択、`r.input.vv`）：単相変圧器2台。**容量は1台あたり**（容量候補・ラベルを単相に切替、`isVv()`）。三相出力 √3×kVA（`kvaOut`）。I2＝I1台＝kVA/V2、I1＝kVA/V1。%Z・電源側%Z・LBS ヒューズ・一次ブレーカー表・EB は単相1台分（`um='single'`。EB 一相分容量＝1台分：内線規程 表の備考「同容量V結線は1台分」※ユーザー確認待ち）。短絡電流は1台の端子短絡。JIS C 4620/手引きの表は対象外→計算値。ヒューズは「V結線用の表なし・単相1台分を参考」警告。結線図は開放Δ（u-w なし）、v 接地。JIS 判定は単相（表3 単相容量・210V）
+- **異容量V結線**（`Vvx`、三相3線の結線選択、`calculateVvx`・`vvxSplit`、`#vvxField`）：出典 **日本電気技術者協会「単相変圧器による異容量V‐V結線方式の特徴」**（https://www.jeea.or.jp/course/contents/04106/ 第1表・(3)(4)式・第2表）。容量欄＝共用変圧器 Tk、`kvaB`＝専用 Ts（単相標準容量）。共用 = √(P1²+P3²/3+(2/√3)P1P3cos(30°+φ))、φ＝進み接続 θ3−θ1（単相負荷 u-v＝共用）／遅れ接続 θ1−θ3（v-w＝共用）、専用 = P3/√3。力率 `pf1`（空欄1.0）・`pf3`（空欄＝電灯と同じ）。負荷配分 `vvxSide`＝三相 kVA／単相 kVA／三相 %（√3·Ts に対する割合）、空欄＝三相最大（第2表の条件）。第2表の値と一致をテストで保証。一次・LBS・タップは共用 Tk の単相で選定（V結線表なし警告）。各回路（三相 P3・単相 P1）は灯動と同じ `r.todo.three/single` 形式、短絡電流は共用・専用の端子短絡（単相 %Z）の大きい方を両回路に（`iscOverride`）。EB 一相分容量＝大きい方の変圧器（内線規程 備考の記憶による、ユーザー確認待ち）。結線図は開放Δ＋共用の中点 o 接地、対地は灯動と同じ（o 接地、反対側頂点 V×√3/2）
 - **単相2線**：高圧・210V は JIS 単三専用変圧器の u-v 間使用（`単三u-v`、中性点 o 接地、対地 105V、JIS 内）。105/100/200V 等は JIS 外（表5）、一端 v 接地
 - **二次側の電圧**（結線図の下、`secVolts`、無負荷・定格）：線間と対地。Δ・Y-Y 一端接地＝対地 u・w は線間・v 0V／Dyn11＝対地 V/√3（4線は相電圧も）／単相3線・スコット各座＝中点接地で V/2（スコットは M座 u1-v1-o1・T座 u2-v2-o2 の2列表）／Yyn0＝Dyn11 と同じ／V結線＝Δ一端接地と同じ／単相2線＝一端接地で V／灯動＝u・v は V/2、w は V×√3/2（210V→181.9V）。コピー文にも【二次電圧】
 - **表示順**：結線図 → 定格電流 → 短絡電流 → LBS/一次側ブレーカー → CT → THR → 母線（電線・銅バー）→ EB → 主幹 → 分岐
@@ -105,7 +106,8 @@ script 読み込み順は `data.js → calc.js → app.js`（ES Modules 不使�
 
 ## カタログ PDF の読み方（クラウド環境）
 
-- 許可済みドメイン：`dl.mitsubishielectric.co.jp`、`www.mitsubishielectric.co.jp`、`www.fujielectric.co.jp`、`cf-store.widencdn.net`（富士の署名付きURL）、`felib.fujielectric.co.jp`、`www.hitachi-ies.co.jp`、`ebook.hitachi-ies.co.jp`（日立カタログ ST-156：`/library/books/st-156/book/data/ST-156.pdf`、数字は独自フォントのため画像化して読む）
+- JIS の確認：`kikakurui.com`（例 `/c4/C4304-2013-01.html`、少し古い版。表の数値は画像のことがある）
+- 許可済みドメイン：`www.jeea.or.jp`（日本電気技術者協会 解説講座）、`kikakurui.com`、`dl.mitsubishielectric.co.jp`、`www.mitsubishielectric.co.jp`、`www.fujielectric.co.jp`、`cf-store.widencdn.net`（富士の署名付きURL）、`felib.fujielectric.co.jp`、`www.hitachi-ies.co.jp`、`ebook.hitachi-ies.co.jp`（日立カタログ ST-156：`/library/books/st-156/book/data/ST-156.pdf`、数字は独自フォントのため画像化して読む）
 - 三菱電機の配電用変圧器事業は日立産機システムへ移管（ユーザー情報）→ 変圧器の資料は日立を優先
 - felib のカタログ一覧は JS＋トークンAPIで取得不可 → ユーザーに PDF 直リンク（cf-store）をもらう
 - 日本語表が `pdftotext` で崩れる/描画されない場合は `pip install pymupdf` して `page.get_pixmap(clip=...)` で画像化し目視で読む
