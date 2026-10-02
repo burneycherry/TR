@@ -266,7 +266,9 @@
       const rows = [];
       for (let i = 0; i < frames.length; i++) {
         const f = frames[i];
-        const max = f.af;
+        // 必要 Icu はフレームで付けうる最大定格の列（例：三菱 63AF は 50A まで → 60A以下の列）
+        let max = 0;
+        f.models.forEach(function (b) { b.ratings.forEach(function (r) { if (r <= f.af && r > max) { max = r; } }); });
         const j = jis ? jisAt(jis, max) : null;
         const need = j ? j.ka : iscKa;
         let hit = null;
@@ -276,7 +278,7 @@
           if (!best || b.icu[col] > best.icu[col]) { best = b; }
         });
         const pickB = hit || best;
-        const ratings = pickB.ratings.filter(function (r) { return r <= max; });
+        const ratings = pickB.ratings.filter(function (r) { return r <= f.af; });
         rows.push({
           af: f.af, model: pickB.model, icu: pickB.icu[col], ok: !!hit, needKa: need, jisCol: j ? j.col : null, jisDash: j ? j.dash : false,
           minRating: ratings[0], maxRating: ratings[ratings.length - 1]

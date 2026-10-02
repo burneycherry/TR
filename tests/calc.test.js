@@ -378,14 +378,14 @@ test('JIS C 4620 解説表1：キュービクルの遮断容量（既定で優�
   assert.strictEqual(row('three', 20, 50).kva, 30); // 表にない容量は直近上位行
   assert.strictEqual(C.jisRow('three', 100, 6600, 440, 50), null); // 210V級のみ
   assert.strictEqual(C.jisRow('scott', 100, 6600, 210, 50), null);
-  assert.strictEqual(C.jisAt(row('three', 100, 50), 63).ka, 11.3); // 63AF → 125A以下列
+  assert.strictEqual(C.jisAt(row('three', 100, 50), 63).ka, 11.3); // 63A → 125A以下列（富士 63AF）
   assert.strictEqual(C.jisAt(row('three', 100, 50), 630).ka, 12.7); // — は行の最大値
   assert.strictEqual(C.jisAt(row('three', 100, 50), 800), null); // 630A超は計算値
   // 分岐：フレームの最大定格の列の値を必要 Icu に
   const r = C.calculate({ mode: 'three', kva: 100, v1: 6600, v2: 210, freq: 50 });
   assert.ok(r.jis);
   const f = r.branch.makers.mitsubishi.rows;
-  assert.deepStrictEqual(f.map((x) => x.af + ':' + x.needKa), ['63:11.3', '125:11.3', '225:12.5', '400:12.7']);
+  assert.deepStrictEqual(f.map((x) => x.af + ':' + x.needKa), ['63:9', '125:11.3', '225:12.5', '400:12.7']); // 三菱 63AF は 50A まで → 60A以下列
   f.forEach((x) => assert.ok(!x.ok || x.icu >= x.needKa));
   // 主幹：単相100kVA 476.2A → 500A → 630A以下列 18.7kA
   const m = C.calculate({ mode: 'single', kva: 100, v1: 6600, v2: 210, freq: 50, mainBreaker: true });
@@ -611,4 +611,16 @@ test('タップ電圧と二次電圧（JIS 表4）', () => {
   const small = C.tapTable(50, 210, 6600);
   assert.deepStrictEqual(small.rows.map(r => r.label), ['R6600', 'F6300', '6000']);
   near(C.tapTable(75, 210, 6750).rows[0].v2, 210, 1e-9); // 受電 6750V・タップ F6750 → 210V
+});
+
+test('分岐の必要 Icu はフレームの最大定格の列（三菱 63AF は 50A まで → 60A以下列）', () => {
+  const r = C.calculate({ mode: 'single', kva: 300, v1: 6600, v2: 210, freq: 60 });
+  const mi = r.branch.makers.mitsubishi.rows[0];
+  assert.strictEqual(mi.af, 63);
+  assert.strictEqual(mi.jisCol, 60);
+  assert.strictEqual(mi.needKa, 13.4);
+  assert.strictEqual(mi.model, 'NF63-SV'); // 15kA ≥ 13.4kA
+  const fj = r.branch.makers.fuji.rows;
+  assert.strictEqual(fj.find((x) => x.af === 50).jisCol, 60);
+  assert.strictEqual(fj.find((x) => x.af === 63).jisCol, 125); // 富士 63AF は 63A まで
 });
