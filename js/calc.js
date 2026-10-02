@@ -481,6 +481,37 @@
     });
   }
 
+  // JIS C 4304/4306 の結線（表18〜20）：単相=単三、三相は容量と二次電圧で Yy0/Yd1/Dd0/Dyn11
+  // 低圧/低圧（一次 600V 以下）は JIS 対象外 → 代表例（二次 300V 以下 Yd1、超 Dyn11）
+  function jisWinding(mode, kva, v1, v2, freq) {
+    const J = D.jisTr;
+    const f = Number(freq) === 60 ? 60 : 50;
+    const notes = [];
+    if (mode === 'single') {
+      const std = J.capacities.single.indexOf(kva) >= 0 && v2 === 210;
+      if (J.capacities.single.indexOf(kva) < 0) { notes.push('容量 ' + kva + 'kVA は JIS 表3 の定格容量外です。'); }
+      if (v2 !== 210) { notes.push('JIS 表5 の単相定格二次電圧は 210-105V です。'); }
+      return { codes: ['単三'], std: v1 > LV_MAX && std, lv: !(v1 > LV_MAX), notes: v1 > LV_MAX ? notes : [] };
+    }
+    if (mode !== 'three') { return null; }
+    if (!(v1 > LV_MAX)) { return { codes: [v2 > 300 ? 'Dyn11' : 'Yd1'], std: false, lv: true, notes: [] }; }
+    const capOk = J.capacities.three.indexOf(kva) >= 0;
+    if (!capOk) { notes.push('容量 ' + kva + 'kVA は JIS 表3 の定格容量外です（結線は容量範囲による代表例）。'); }
+    if (v2 > 300) {
+      const vOk = v2 === J.v2.threeN[f];
+      const kOk = J.dynKva.indexOf(kva) >= 0;
+      if (!vOk) { notes.push('JIS 表6 の Δ-Y（中性点端子付き）の定格二次電圧は 420V（50Hz）・440V（60Hz）です（選択中 ' + f + 'Hz）。'); }
+      if (!kOk && capOk) { notes.push('JIS 表19 で Δ-Y（中性点端子付き）は 1500・2000kVA です。'); }
+      return { codes: ['Dyn11'], std: capOk && vOk && kOk, lv: false, notes: notes };
+    }
+    const rows = J.threeConn;
+    let codes = rows[rows.length - 1][1];
+    for (let i = 0; i < rows.length; i++) { if (kva <= rows[i][0]) { codes = rows[i][1]; break; } }
+    if (v2 !== J.v2.three[0]) { notes.push('JIS 表6 の三相定格二次電圧（Y-Y・Y-Δ・Δ-Δ）は 210V です。'); }
+    if (J.dynKva.indexOf(kva) >= 0) { notes.push('JIS 表19 では 1500・2000kVA は Δ-Δ（210V）又は Δ-Y 中性点端子付き（420/440V）です。'); }
+    return { codes: codes.slice(), std: capOk && v2 === J.v2.three[0], lv: false, notes: notes };
+  }
+
   function calculate(input) {
     if (input.mode === 'todo') { return calculateTodo(input); }
     const mode = normMode(input);
@@ -538,6 +569,7 @@
 
     return {
       input: { mode: mode, kva: kva, v1: v1, v2: v2, trType: trType, kva1: kva1 },
+      winding: jisWinding(mode, kva, v1, v2, input.freq),
       hv: hv, circuits: circuits,
       z: { tr: zTr, trIsDefault: !(zInput > 0), src: zSrc, total: zTotal },
       i1: i1, i2: i2, iscKa: iscKa, jis: jis, iscRef: iscRef,
@@ -549,7 +581,7 @@
 
   const api = {
     calculate: calculate, ratedCurrent: ratedCurrent, defaultZ: defaultZ, sourceZ: sourceZ,
-    pickAtLeast: pickAtLeast, todoRow: todoRow, selectPrimaryMitsubishi: selectPrimaryMitsubishi, selectPrimaryFuji: selectPrimaryFuji, jisRow: jisRow, guideRow: guideRow, jisAt: jisAt, todoSplit: todoSplit, selectCable: selectCable, selectBusbar: selectBusbar,
+    pickAtLeast: pickAtLeast, todoRow: todoRow, selectPrimaryMitsubishi: selectPrimaryMitsubishi, selectPrimaryFuji: selectPrimaryFuji, jisWinding: jisWinding, jisRow: jisRow, guideRow: guideRow, jisAt: jisAt, todoSplit: todoSplit, selectCable: selectCable, selectBusbar: selectBusbar,
     selectBreaker: selectBreaker, selectBranch: selectBranch, selectCT: selectCT, selectTHR: selectTHR, selectFuse: selectFuse,
     selectEB: selectEB, data: D
   };

@@ -93,8 +93,14 @@
   // 容量 select（標準容量＋手入力）
   function buildKva(keep) {
     const m = calcMode(uiMode());
-    const labels = m === 'single' ? { 750: '750（JIS外）', 1000: '1000（JIS外）' } : null;
     const list = m === 'todo' ? D.todo.makers[radio('todoMaker') === 'mitsubishi' ? 'mitsubishi' : 'hitachi'].rows.map(function (r) { return r[0]; }) : D.capacities[m];
+    // JIS C 4304/4306 表3 にない容量は「JIS外」
+    const jisCaps = D.jisTr.capacities[m];
+    let labels = null;
+    if (jisCaps) {
+      labels = {};
+      list.forEach(function (k) { if (jisCaps.indexOf(k) < 0) { labels[k] = k + '（JIS外）'; } });
+    }
     buildVolt(el.kvaSel, el.kva, list, keep, labels);
   }
 
@@ -252,30 +258,54 @@
       ln(o[0], o[1], o[0] + 28, o[1]); gnd(o[0] + 28, o[1]);
       name = 'Y-Δ 灯動共用（二次Δの一相中点 o を引出し・o 接地）';
       outs = ['三相 u-v-w', v2 + 'V', '単相 u-o-v', v2 + '-' + (v2 / 2) + 'V'];
-    } else if (v2 > 300) {
-      // Dyn11：一次 Δ（U 90°・V -30°・W 210°）、二次 Y は30°進み → u 120°・v 0°・w 240°
-      const t = delta(P, Y0, ['U', 'W', 'V']); dot(t.a[0], t.a[1]); dot(t.b[0], t.b[1]); dot(t.c[0], t.c[1]);
-      const pu = pol(S, Y0, 120), pv = pol(S, Y0, 0), pw = pol(S, Y0, 240);
-      [[pu, 'u'], [pv, 'v'], [pw, 'w']].forEach(function (q) { ln(S, Y0, q[0][0], q[0][1]); dot(q[0][0], q[0][1]); lbl(q[0], S, Y0, q[1]); });
-      dot(S, Y0); tx(S + 7, Y0 - 6, 'N', 'start');
-      ln(S, Y0, S, Y0 + R + 10); ln(S, Y0 + R + 10, S + 30, Y0 + R + 10); gnd(S + 30, Y0 + R + 10);
-      name = 'Δ-Y（Dyn11：二次は一次に対し30°進み）中性点 N 接地';
-      outs = inp.uiMode === 'three4w' ? ['三相4線', v2 + '/' + Math.round(v2 / Math.sqrt(3)) + 'V'] : ['三相 ' + v2 + 'V'];
     } else {
-      // Yd1：一次 Y（U 90°・V -30°・W 210°）、二次 Δ は30°遅れ → u 60°・v -60°・w 180°
-      const t = star(P, Y0, ['U', 'W', 'V']); dot(t.a[0], t.a[1]); dot(t.b[0], t.b[1]); dot(t.c[0], t.c[1]);
-      const pu = pol(S, Y0, 60), pv = pol(S, Y0, -60), pw = pol(S, Y0, 180);
-      ln(pu[0], pu[1], pv[0], pv[1]); ln(pv[0], pv[1], pw[0], pw[1]); ln(pw[0], pw[1], pu[0], pu[1]);
-      [[pu, 'u'], [pv, 'v'], [pw, 'w']].forEach(function (q) { dot(q[0][0], q[0][1]); lbl(q[0], S, Y0, q[1]); });
-      ln(pv[0], pv[1], pv[0] + 24, pv[1]); gnd(pv[0] + 24, pv[1]);
-      name = 'Y-Δ（Yd1：二次は一次に対し30°遅れ）二次一端接地 ※Δ-Δ（Dd0）の機種もあり';
-      outs = ['三相3線 ' + v2 + 'V'];
+      // 三相：JIS C 4304/4306 表19・表20（ベクトル図の向きは JIS 表20：一次 U 210°・V 90°・W −30°）
+      const wd = r.winding || { codes: [v2 > 300 ? 'Dyn11' : 'Yd1'] };
+      const code = wd.codes[0];
+      const PA = { u: 210, v: 90, w: -30 };
+      const SA = code === 'Yd1' ? { u: 180, v: 60, w: -60 } : code === 'Dyn11' ? { u: 240, v: 120, w: 0 } : PA;
+      const pts = function (cx, A) { return { u: pol(cx, Y0, A.u), v: pol(cx, Y0, A.v), w: pol(cx, Y0, A.w) }; };
+      const drawY = function (cx, q, n) { ['u', 'v', 'w'].forEach(function (k, i) { ln(cx, Y0, q[k][0], q[k][1]); dot(q[k][0], q[k][1]); lbl(q[k], cx, Y0, n[i]); }); };
+      const drawD = function (cx, q, n) {
+        ln(q.u[0], q.u[1], q.v[0], q.v[1]); ln(q.v[0], q.v[1], q.w[0], q.w[1]); ln(q.w[0], q.w[1], q.u[0], q.u[1]);
+        ['u', 'v', 'w'].forEach(function (k, i) { dot(q[k][0], q[k][1]); lbl(q[k], cx, Y0, n[i]); });
+      };
+      const pq = pts(P, PA), sq = pts(S, SA);
+      (code === 'Yy0' || code === 'Yd1' ? drawY : drawD)(P, pq, ['U', 'V', 'W']);
+      (code === 'Yy0' || code === 'Dyn11' ? drawY : drawD)(S, sq, ['u', 'v', 'w']);
+      if (code === 'Dyn11') {
+        dot(S, Y0); tx(S + 7, Y0 + 14, 'N', 'start');
+        ln(S, Y0, S, Y0 + R + 10); ln(S, Y0 + R + 10, S + 30, Y0 + R + 10); gnd(S + 30, Y0 + R + 10);
+        outs = inp.uiMode === 'three4w' ? ['三相4線', v2 + '/' + Math.round(v2 / Math.sqrt(3)) + 'V'] : ['三相 ' + v2 + 'V'];
+      } else {
+        // 二次一端（v）接地
+        const xg = S + R + 14;
+        ln(sq.v[0], sq.v[1], xg, sq.v[1]); gnd(xg, sq.v[1]);
+        outs = ['三相3線 ' + v2 + 'V'];
+      }
+      const NAMES = {
+        Yy0: 'Y-Y（Yy0：位相変位 0°）二次一端接地',
+        Yd1: 'Y-Δ（Yd1：二次は一次より30°遅れ）二次一端接地',
+        Dd0: 'Δ-Δ（Dd0：位相変位 0°）二次一端接地',
+        Dyn11: 'Δ-Y（Dyn11：二次は一次より30°進み）中性点 N 接地'
+      };
+      name = NAMES[code] + (wd.codes[1] ? '。JIS 表19 では ' + NAMES[wd.codes[1]].split('）')[0] + '）も可' : '');
     }
     tx(P, 14, '一次 ' + v1 + 'V');
     tx(S, 14, '二次');
     outs.forEach(function (o2, i) { tx(262, Y0 - 6 - (outs.length > 2 ? 16 : 0) + i * 16, o2, 'start'); });
+    const wd = r.winding;
+    let src;
+    if (wd && !wd.lv) {
+      src = D.jisTr.name + ' 表18〜20 による' + (wd.std ? '' : '（JIS 標準外の条件を含むため参考）');
+    } else if (wd) {
+      src = '低圧/低圧は JIS C 4304/4306 の対象外のため代表例';
+    } else {
+      src = '代表例（三菱 油入変圧器カタログ L-10034-H・日立 灯動共用 製品ページ）';
+    }
     return '<svg class="wd" viewBox="0 0 340 168" role="img" aria-label="結線図">' + out.join('') + '</svg>' +
-      '<p class="sub-note">' + esc(name) + '。結線は代表例（三菱 油入変圧器カタログ L-10034-H・日立 灯動共用 製品ページ）。実機は銘板・仕様書で確認。</p>';
+      '<p class="sub-note">' + esc(name) + '。' + esc(src) + '。実機は銘板・仕様書で確認。</p>' +
+      (wd ? wd.notes.map(function (w) { return '<div class="warn">' + esc(w) + '</div>'; }).join('') : '');
   }
 
   function render(r, inp) {
@@ -295,6 +325,7 @@
 
     // 結線図
     html += card('結線図', wiring(r, inp));
+    if (r.winding && !r.winding.lv) { t.push('【結線】' + r.winding.codes.join(' 又は ') + '（' + D.jisTr.name + (r.winding.std ? '' : '・標準外を含む') + '）'); }
 
     // 定格電流
     if (r.todo) {

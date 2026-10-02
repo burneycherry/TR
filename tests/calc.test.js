@@ -565,3 +565,27 @@ test('スコットは一次電圧で高圧/低圧を判定', () => {
   assert.ok(C.calculate({ mode: 'scott', kva: 50, v1: 6600, v2: 210 }).fuse);
   assert.ok(C.calculate({ mode: 'scott', kva: 50, v1: 440, v2: 210 }).primaryBreaker);
 });
+
+test('JIS C 4304/4306 結線（表19・表6）', () => {
+  const w = (kva, v2, f, v1) => C.jisWinding(kva === 'single' ? 'single' : 'three', kva === 'single' ? 50 : kva, v1 || 6600, v2, f);
+  assert.deepStrictEqual(w(20, 210).codes, ['Yy0']);
+  assert.deepStrictEqual(w(50, 210).codes, ['Yy0']);
+  assert.deepStrictEqual(w(75, 210).codes, ['Yd1']);
+  assert.deepStrictEqual(w(500, 210).codes, ['Yd1']);
+  assert.deepStrictEqual(w(750, 210).codes, ['Yd1', 'Dd0']);
+  assert.deepStrictEqual(w(1000, 210).codes, ['Yd1', 'Dd0']);
+  assert.deepStrictEqual(w(1500, 210).codes, ['Dd0']);
+  assert.strictEqual(w(1500, 210).std, true);
+  const n50 = w(2000, 420, 50);
+  assert.deepStrictEqual(n50.codes, ['Dyn11']);
+  assert.strictEqual(n50.std, true);
+  assert.strictEqual(w(2000, 440, 50).std, false); // 440V は 60Hz
+  assert.strictEqual(w(2000, 440, 60).std, true);
+  assert.strictEqual(w(500, 420, 50).std, false); // Δ-Y は 1500・2000kVA のみ
+  assert.strictEqual(w(300, 220).std, false);
+  assert.strictEqual(w(300, 210, 50, 420).lv, true); // 低圧/低圧は対象外
+  assert.deepStrictEqual(w('single', 210).codes, ['単三']);
+  assert.strictEqual(C.jisWinding('single', 750, 6600, 210, 50).std, false);
+  assert.strictEqual(C.jisWinding('scott', 50, 6600, 210, 50), null);
+  assert.deepStrictEqual(C.calculate({ phase: 3, kva: 30, v1: 6600, v2: 210 }).winding.codes, ['Yy0']);
+});
