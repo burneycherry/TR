@@ -61,8 +61,9 @@
   }
   function uiMode() { return radio('mode') || 'three'; }
   function calcMode(m) { return m === 'three4w' ? 'three' : (m === 'single2w' || m === 'single3w' ? 'single' : m); }
-  // 結線の選択（三相3線のみ、空＝代表例）
+  // 結線の選択（三相3線・三相4線、空＝代表例）
   let connChoice = '';
+  function isVv() { return uiMode() === 'three' && connChoice === 'Vv0'; }
 
   // 電圧 select（候補＋手入力）を作る
   function buildVolt(sel, manualInput, list, keep, labels) {
@@ -102,9 +103,11 @@
   // 容量 select（標準容量＋手入力）
   function buildKva(keep) {
     const m = calcMode(uiMode());
-    const list = m === 'todo' ? D.todo.makers[radio('todoMaker') === 'mitsubishi' ? 'mitsubishi' : 'hitachi'].rows.map(function (r) { return r[0]; }) : D.capacities[m];
+    // V結線は単相変圧器1台あたりの容量
+    const capKey = isVv() ? 'single' : m;
+    const list = m === 'todo' ? D.todo.makers[radio('todoMaker') === 'mitsubishi' ? 'mitsubishi' : 'hitachi'].rows.map(function (r) { return r[0]; }) : D.capacities[capKey];
     // JIS C 4304/4306 表3 にない容量は「JIS外」
-    const jisCaps = D.jisTr.capacities[m];
+    const jisCaps = D.jisTr.capacities[capKey];
     let labels = null;
     if (jisCaps) {
       labels = {};
@@ -149,7 +152,7 @@
       iscKa: el.isc.value === '' ? null : Number(el.isc.value),
       kva1: el.kva1.value === '' ? null : Number(el.kva1.value),
       wires: m === 'single2w' ? 2 : 3,
-      conn: m === 'three' ? connChoice : '',
+      conn: m === 'three' || m === 'three4w' ? connChoice : '',
       tapOn: radio('tapOn') === 'yes',
       tap: Number(el.tap.value) || 6600,
       tapSupply: el.tapSupply.value === '' ? null : Number(el.tapSupply.value)
@@ -230,24 +233,35 @@
         ['対地 u・v', f1(h)], ['対地 w（Δ頂点、o 接地）', f1(v * Math.sqrt(3) / 2)]];
     }
     if (m === 'scott') {
-      if (v <= 150) { return [['各座 線間', f1(v)], ['対地（各座一端接地）', f1(v) + '／0V']]; }
-      return [['各座 線間 u-v', f1(v)], ['各座 u-o・v-o', f1(h)], ['対地 u・v（中点 o 接地）', f1(h)]];
+      // M座（u1-v1、中点 o1）・T座（u2-v2、中点 o2）の2列
+      if (v <= 150) { return { cols: ['M座', 'T座'], rows: [['線間', 'u1-v1 ' + f1(v), 'u2-v2 ' + f1(v)], ['対地（各座一端接地）', 'u1 ' + f1(v), 'u2 ' + f1(v)]] }; }
+      return { cols: ['M座', 'T座'], rows: [['線間', 'u1-v1 ' + f1(v), 'u2-v2 ' + f1(v)], ['中性線間', 'u1-o1・v1-o1 ' + f1(h), 'u2-o2・v2-o2 ' + f1(h)],
+        ['対地（中点 o1・o2 接地）', 'u1・v1 ' + f1(h), 'u2・v2 ' + f1(h)]] };
     }
     if (m === 'single') {
+      if (r.winding && r.winding.codes[0] === '単三u-v') { return [['線間 u-v', f1(v)], ['対地 u・v（中性点 o 接地）', f1(h)]]; }
       if (inp.uiMode === 'single2w') { return [['線間 u-v', f1(v)], ['対地 u（v 接地）', f1(v)]]; }
       return [['線間 u-v', f1(v)], ['u-o・v-o', f1(h)], ['対地 u・v（中性点 o 接地）', f1(h)]];
     }
     const code = r.winding ? r.winding.codes[0] : (v > 300 ? 'Dyn11' : 'Yd1');
-    if (code === 'Dyn11') {
+    if (code === 'Dyn11' || code === 'Yyn0') {
       const dy = [['線間 u-v・v-w・w-u', f1(v)], ['対地 u・v・w（中性点 N 接地）', f1(ph)]];
       if (inp.uiMode === 'three4w') { dy.splice(1, 0, ['相電圧 u-N・v-N・w-N', f1(ph)]); }
       return dy;
     }
     return [['線間 u-v・v-w・w-u', f1(v)], ['対地 u・w（v 接地）', f1(v)], ['対地 v', '0V']];
   }
-  function secVoltHtml(rows) {
-    return '<table class="res" style="margin-top:8px"><tr><th colspan="2" style="width:auto">二次側の電圧（無負荷・定格）</th></tr>' +
-      rows.map(function (x) { return '<tr><th>' + esc(x[0]) + '</th><td><strong>' + esc(x[1]) + '</strong></td></tr>'; }).join('') + '</table>';
+  function secVoltHtml(sv) {
+    const head = '<table class="res" style="margin-top:8px"><tr><th colspan="' + (sv.cols ? 3 : 2) + '" style="width:auto">二次側の電圧（無負荷・定格）</th></tr>';
+    if (sv.cols) {
+      return head + '<tr><th></th>' + sv.cols.map(function (c) { return '<th>' + esc(c) + '</th>'; }).join('') + '</tr>' +
+        sv.rows.map(function (x) { return '<tr><th>' + esc(x[0]) + '</th><td>' + esc(x[1]) + '</td><td>' + esc(x[2]) + '</td></tr>'; }).join('') + '</table>';
+    }
+    return head + sv.map(function (x) { return '<tr><th>' + esc(x[0]) + '</th><td><strong>' + esc(x[1]) + '</strong></td></tr>'; }).join('') + '</table>';
+  }
+  function secVoltText(sv) {
+    if (sv.cols) { return sv.rows.map(function (x) { return x[0] + ' ' + x[1] + '・' + x[2]; }).join('／'); }
+    return sv.map(function (x) { return x[0] + ' ' + x[1]; }).join('／');
   }
 
   // 結線図（代表例）：三菱 油入変圧器カタログ L-10034-H（仕様 p.9・スコット p.27・ダブルパワー p.23）、日立 灯動共用 製品ページ
@@ -286,7 +300,15 @@
     const P = 62, S = 196, Y0 = 72;
     let name = '';
     let outs = [];
-    if (m === 'single' && inp.uiMode === 'single2w') {
+    if (m === 'single' && r.winding && r.winding.codes[0] === '単三u-v') {
+      // 単相2線 210V：JIS の単三専用変圧器の u-v 間を使用、中性点 o は B種接地
+      ln(P, Y0 - R, P, Y0 + R); dot(P, Y0 - R); dot(P, Y0 + R); tx(P - 10, Y0 - R + 4, 'U', 'end'); tx(P - 10, Y0 + R + 4, 'V', 'end');
+      ln(S, Y0 - R, S, Y0 + R); dot(S, Y0 - R); dot(S, Y0); dot(S, Y0 + R);
+      tx(S - 8, Y0 - R + 4, 'u', 'end'); tx(S - 8, Y0 + 4, 'o', 'end'); tx(S - 8, Y0 + R + 4, 'v', 'end');
+      ln(S, Y0, S + 22, Y0); gnd(S + 22, Y0);
+      name = '単相2線（単三専用変圧器の u-v 間を使用、中性点 o 接地）';
+      outs = ['単相2線', v2 + 'V（u-v）'];
+    } else if (m === 'single' && inp.uiMode === 'single2w') {
       ln(P, Y0 - R, P, Y0 + R); dot(P, Y0 - R); dot(P, Y0 + R); tx(P - 10, Y0 - R + 4, 'U', 'end'); tx(P - 10, Y0 + R + 4, 'V', 'end');
       ln(S, Y0 - R, S, Y0 + R); dot(S, Y0 - R); dot(S, Y0 + R);
       tx(S - 8, Y0 - R + 4, 'u', 'end'); tx(S - 8, Y0 + R + 4, 'v', 'end');
@@ -308,15 +330,15 @@
       tx(P - R - 6, yb + 4, 'V', 'end'); tx(P + R + 6, yb + 4, 'U', 'start'); tx(P, yb - 1.6 * R - 6, 'W');
       const xv = S - 36, yt = Y0 - 36, yu = Y0 + 16;
       ln(xv, yt, xv, yu); dot(xv, yt); dot(xv, (yt + yu) / 2); dot(xv, yu);
-      tx(xv - 6, yt + 4, 'v2', 'end'); tx(xv - 6, (yt + yu) / 2 + 4, '02', 'end'); tx(xv - 6, yu + 4, 'u2', 'end');
+      tx(xv - 6, yt + 4, 'v2', 'end'); tx(xv - 6, (yt + yu) / 2 + 4, 'o2', 'end'); tx(xv - 6, yu + 4, 'u2', 'end');
       const xh0 = xv + 12, xh1 = xv + 76, yh = yu + 8;
       ln(xh0, yh, xh1, yh); dot(xh0, yh); dot((xh0 + xh1) / 2, yh); dot(xh1, yh);
-      tx(xh0, yh + 14, 'v1'); tx((xh0 + xh1) / 2 + 5, yh + 14, '01', 'start'); tx(xh1, yh + 14, 'u1');
+      tx(xh0, yh + 14, 'v1'); tx((xh0 + xh1) / 2 + 5, yh + 14, 'o1', 'start'); tx(xh1, yh + 14, 'u1');
       ln(xh0, yu - 6, xh0 + 6, yu - 6); ln(xh0 + 6, yu - 6, xh0 + 6, yu); // 直角記号
-      // EB（B種接地）は各座の中点 01・02 から（ユーザー指定）
+      // EB（B種接地）は各座の中点 o1・o2 から（ユーザー指定）
       const xg = xh1 + 22, y02 = (yt + yu) / 2, xm = (xh0 + xh1) / 2;
       ln(xv, y02, xg, y02); ln(xm, yh, xm, yh + 22); ln(xm, yh + 22, xg, yh + 22); ln(xg, y02, xg, yh + 22); gnd(xg, yh + 22);
-      name = 'スコット結線（一次 T結線、二次 M座・T座は90°位相差、各座 単相3線。B種接地は中点 01・02 から）';
+      name = 'スコット結線（一次 T結線、二次 M座・T座は90°位相差、各座 単相3線。B種接地は中点 o1・o2 から）';
       outs = ['単相3線×2', v2 + '/' + (v2 / 2) + 'V'];
     } else if (m === 'todo') {
       const t = star(P, Y0, ['U', 'W', 'V']); dot(t.a[0], t.a[1]); dot(t.b[0], t.b[1]); dot(t.c[0], t.c[1]);
@@ -334,26 +356,33 @@
       const code = wd.codes[0];
       const PA = { u: 210, v: 90, w: -30 };
       const SA = code === 'Yd1' ? { u: 180, v: 60, w: -60 } : code === 'Dyn11' ? { u: 240, v: 120, w: 0 } : PA;
+      const star1 = code === 'Yy0' || code === 'Yd1' || code === 'Yyn0';
+      const star2 = code === 'Yy0' || code === 'Dyn11' || code === 'Yyn0';
+      const neutral = code === 'Dyn11' || code === 'Yyn0';
       const pts = function (cx, A) { return { u: pol(cx, Y0, A.u), v: pol(cx, Y0, A.v), w: pol(cx, Y0, A.w) }; };
       const drawY = function (cx, q, n) { ['u', 'v', 'w'].forEach(function (k, i) { ln(cx, Y0, q[k][0], q[k][1]); dot(q[k][0], q[k][1]); lbl(q[k], cx, Y0, n[i]); }); };
       const drawD = function (cx, q, n) {
-        ln(q.u[0], q.u[1], q.v[0], q.v[1]); ln(q.v[0], q.v[1], q.w[0], q.w[1]); ln(q.w[0], q.w[1], q.u[0], q.u[1]);
+        // V結線は u-w 間（開放）を描かない
+        ln(q.u[0], q.u[1], q.v[0], q.v[1]); ln(q.v[0], q.v[1], q.w[0], q.w[1]);
+        if (code !== 'Vv0') { ln(q.w[0], q.w[1], q.u[0], q.u[1]); }
         ['u', 'v', 'w'].forEach(function (k, i) { dot(q[k][0], q[k][1]); lbl(q[k], cx, Y0, n[i]); });
       };
       const pq = pts(P, PA), sq = pts(S, SA);
-      (code === 'Yy0' || code === 'Yd1' ? drawY : drawD)(P, pq, ['U', 'V', 'W']);
-      (code === 'Yy0' || code === 'Dyn11' ? drawY : drawD)(S, sq, ['u', 'v', 'w']);
-      if (code === 'Dyn11') {
-        dot(S, Y0); tx(S + 7, Y0 + 14, 'N', 'start');
+      (star1 ? drawY : drawD)(P, pq, ['U', 'V', 'W']);
+      (star2 ? drawY : drawD)(S, sq, ['u', 'v', 'w']);
+      if (neutral) {
+        dot(S, Y0); if (code === 'Yyn0') { tx(S - 7, Y0 - 4, 'N', 'end'); } else { tx(S + 7, Y0 + 14, 'N', 'start'); }
         ln(S, Y0, S, Y0 + R + 10); ln(S, Y0 + R + 10, S + 30, Y0 + R + 10); gnd(S + 30, Y0 + R + 10);
         outs = inp.uiMode === 'three4w' ? ['三相4線', v2 + '/' + Math.round(v2 / Math.sqrt(3)) + 'V'] : ['三相 ' + v2 + 'V'];
       } else {
         // 二次一端（v）接地
         const xg = S + R + 14;
         ln(sq.v[0], sq.v[1], xg, sq.v[1]); gnd(xg, sq.v[1]);
-        outs = ['三相3線 ' + v2 + 'V'];
+        outs = code === 'Vv0' ? ['三相3線 ' + v2 + 'V', '単相 ' + r.input.kva + 'kVA×2'] : ['三相3線 ' + v2 + 'V'];
       }
       const NAMES = {
+        Yyn0: 'Y-Y 中性点付き（Yyn0：位相変位 0°）中性点 N 接地',
+        Vv0: 'V-V（単相変圧器2台、位相変位 0°、三相出力は1台の √3 倍）二次 v 接地',
         Yy0: 'Y-Y（Yy0：位相変位 0°）二次一端接地',
         Yd1: 'Y-Δ（Yd1：二次は一次より30°遅れ）二次一端接地',
         Dd0: 'Δ-Δ（Dd0：位相変位 0°）二次一端接地',
@@ -373,15 +402,15 @@
     } else {
       src = '代表例（三菱 油入変圧器カタログ L-10034-H・日立 灯動共用 製品ページ）';
     }
-    if (wd && wd.selected) { src = wd.lv ? '低圧/低圧は JIS C 4304/4306 の対象外' : D.jisTr.name + ' 表19 で確認'; }
+    if (wd && wd.selected) { src = wd.lv ? '低圧/低圧は JIS C 4304/4306 の対象外' : (wd.codes[0] === 'Vv0' ? '単相変圧器は ' + D.jisTr.name + ' 表3・表5（単三専用 210-105V の u-v 間を使用）' : D.jisTr.name + ' 表19 で確認'); }
     // 結線の選択（三相3線のみ）：既定は代表例
     let selHtml = '';
-    if (inp.uiMode === 'three' && wd) {
+    if ((inp.uiMode === 'three' || inp.uiMode === 'three4w') && wd) {
       const autoName = wd.auto.map(function (c) { return C.CONN_NAMES[c]; }).join(' 又は ');
       selHtml = '<div class="field" style="margin:0 0 8px"><label class="label" for="connSel">結線（既定は代表例）</label><select id="connSel">' +
         '<option value="">代表例：' + esc(autoName) + '</option>' +
-        ['Yy0', 'Yd1', 'Dd0', 'Dyn11'].map(function (c) {
-          const out2 = !wd.lv && wd.auto.indexOf(c) < 0;
+        C.CONN_OPTIONS[inp.uiMode].map(function (c) {
+          const out2 = !wd.lv && c !== 'Vv0' && wd.auto.indexOf(c) < 0;
           return '<option value="' + c + '"' + (wd.selected && wd.codes[0] === c ? ' selected' : '') + '>' + esc(C.CONN_NAMES[c]) + (out2 ? '（JIS外）' : '') + '</option>';
         }).join('') + '</select></div>';
     }
@@ -403,13 +432,13 @@
     ] : [[r, per, '']];
 
     const v2Lbl = (V2_LABELS[inp.uiMode] && V2_LABELS[inp.uiMode][r.input.v2]) || String(r.input.v2);
-    const kvaLbl = r.todo ? r.input.kva + 'kVA（配分 三相' + r.input.kva3 + '＋単相' + r.input.kva1 + 'kVA、' + r.input.freq + 'Hz）' : r.input.kva + 'kVA';
+    const kvaLbl = r.todo ? r.input.kva + 'kVA（配分 三相' + r.input.kva3 + '＋単相' + r.input.kva1 + 'kVA、' + r.input.freq + 'Hz）' : (r.input.vv ? 'V結線 単相' + r.input.kva + 'kVA×2（三相出力 ' + fmt(r.input.kvaOut, 1) + 'kVA）' : r.input.kva + 'kVA');
     t.push('【変圧器】' + MODE_LABEL[inp.uiMode] + ' ' + (r.input.trType === 'mold' ? 'モールド ' : '油入 ') + kvaLbl + ' ' + r.input.v1 + 'V/' + v2Lbl.split(' ')[0] + 'V');
 
     // 結線図
     html += card('結線図', wiring(r, inp));
     if (r.winding && !r.winding.lv) { t.push('【結線】' + (r.winding.selected ? '選択 ' : '') + r.winding.codes.join(' 又は ') + '（' + D.jisTr.name + (r.winding.std ? '' : '・標準外を含む') + '）'); }
-    t.push('【二次電圧】' + secVolts(r, inp).map(function (x) { return x[0] + ' ' + x[1]; }).join('／'));
+    t.push('【二次電圧】' + secVoltText(secVolts(r, inp)));
 
     // タップ電圧（オン時のみ）：受電電圧に対する各タップの二次電圧
     if (tapEnabled(inp) && inp.tapOn) {
@@ -445,6 +474,7 @@
       html += card('定格電流',
         '<div class="kv">' + kvItem('一次電流 I₁', fmt(r.i1, 2), 'A') + kvItem('二次電流 I₂' + (n > 1 ? '（各座）' : ''), fmt(r.i2, 1), 'A') + '</div>' +
         (n > 1 ? '<p class="sub-note">スコット二次：M座・T座 各 ' + fmt(r.input.kva / 2, 1) + 'kVA の単相回路</p>' : '') +
+        (r.input.vv ? '<p class="sub-note">V結線：単相 ' + r.input.kva + 'kVA×2、三相出力 ' + fmt(r.input.kvaOut, 1) + 'kVA（1台の √3 倍）。線電流＝1台の定格電流 ' + r.input.kva + 'kVA÷' + r.input.v2 + 'V。短絡電流は1台の端子短絡（単相 %Z）として計算</p>' : '') +
         (inp.uiMode === 'three4w' ? '<p class="sub-note">三相4線式 ' + esc(v2Lbl) + 'V：電流は線間電圧 ' + r.input.v2 + 'V で計算</p>' : ''));
       t.push('一次電流: ' + fmt(r.i1, 2) + 'A / 二次電流' + (n > 1 ? '(各座)' : '') + ': ' + fmt(r.i2, 1) + 'A');
     }
@@ -617,7 +647,7 @@
       const eb = '<div class="kv">' + kvItem('EB 接地線', (e.label ? esc(e.label) : '個別検討') + upLine, '') +
         kvItem('一相分容量', fmt(e.phaseKva, 1), 'kVA') + '</div>' +
         '<p class="sub-note">表2.13.1（' + e.voltClass + '）：' + (e.sq !== null ? e.sq + 'mm²' : '範囲外') + '</p>' + up +
-        '<p class="sub-note">B種接地工事の接地線の太さ（' + e.voltClass + '・銅線）。一相分容量：三相=定格÷3、単相=定格、スコット=定格÷2、灯動共用=単相分＋三相分÷3。単相3線式は200V級を適用。<br>' + esc(D.eb.note) + '</p>';
+        '<p class="sub-note">B種接地工事の接地線の太さ（' + e.voltClass + '・銅線）。一相分容量：三相=定格÷3、単相=定格、スコット=定格÷2、灯動共用=単相分＋三相分÷3、同容量V結線=単相1台分。単相3線式は200V級を適用。<br>' + esc(D.eb.note) + '</p>';
       html += card('EB（B種接地線）サイズ', eb, e.verified === false);
       t.push('EB: ' + (e.label || '個別検討') + (e.sizeUp.length ? '（ブレーカー ' + e.baseMax + 'A超は表2.13.2でサイズアップ：' + e.sizeUp.map(function (u) { return '〜' + u.to + 'A ' + u.label; }).join('、') + (e.maxByMain ? '・主幹' : '')  + '）' : ''));
     }
@@ -671,7 +701,7 @@
   function update() {
     const inp = readInput();
     const todo = inp.mode === 'todo';
-    el.kva1Field.hidden = !(inp.mode === 'three' && inp.v1 > 600);
+    el.kva1Field.hidden = !(inp.mode === 'three' && inp.v1 > 600 && !isVv());
     if (el.kva1Field.hidden) { inp.kva1 = null; }
     $('freqField').hidden = !todo;
     const tapOk = tapEnabled(inp);
@@ -682,7 +712,7 @@
     el.tapSupply.placeholder = String(inp.v1 || 6600);
     if (inp.tapSupply === null) { inp.tapSupply = inp.v1; }
     $('todoMakerField').hidden = !todo;
-    $('kvaLabel').textContent = todo ? '定格容量 [kVA]（灯動共用）' : '容量 [kVA]';
+    $('kvaLabel').textContent = todo ? '定格容量 [kVA]（灯動共用）' : (isVv() ? '容量 [kVA]（V結線：単相変圧器1台あたり）' : '容量 [kVA]');
     const tr = todo ? C.todoRow(inp.todoMaker, inp.kva) : null;
     $('todoInfo').textContent = tr ? '三相側 最大 ' + tr.kva + 'kVA ／ 単相210-105V 最大 ' + tr.single + 'kVA（負荷配分曲線）、%Z ' +
       (tr.zRange ? tr.zRange[0] + '%(50Hz)・' + tr.zRange[1] + '%(60Hz) → 下限 ' + tr.z50 + '% を使用' : tr.z50 + '%(50Hz)・' + tr.z60 + '%(60Hz)') : '';
@@ -765,7 +795,7 @@
         const v2 = voltValue(el.v2, el.v2m);
         const kva = voltValue(el.kvaSel, el.kva);
         const m = uiMode();
-        const kvaList = m === 'todo' ? D.todo.makers[radio('todoMaker') === 'mitsubishi' ? 'mitsubishi' : 'hitachi'].rows.map(function (x) { return x[0]; }) : D.capacities[calcMode(m)];
+        const kvaList = m === 'todo' ? D.todo.makers[radio('todoMaker') === 'mitsubishi' ? 'mitsubishi' : 'hitachi'].rows.map(function (x) { return x[0]; }) : D.capacities[isVv() ? 'single' : calcMode(m)];
         buildVolts(null, V2_OPTIONS[m].indexOf(v2) >= 0 ? v2 : null);
         buildKva(kvaList.indexOf(kva) >= 0 ? kva : (kvaList.indexOf(300) >= 0 ? 300 : kvaList[Math.floor(kvaList.length / 2)]));
         update();
@@ -786,7 +816,12 @@
     el.tap.addEventListener('change', update);
     // 結線図カード内の結線選択（描画のたびに作り直すので委譲で受ける）
     el.results.addEventListener('change', function (e) {
-      if (e.target && e.target.id === 'connSel') { connChoice = e.target.value; update(); }
+      if (e.target && e.target.id === 'connSel') {
+        const wasVv = isVv();
+        connChoice = e.target.value;
+        if (wasVv !== isVv()) { buildKva(voltValue(el.kvaSel, el.kva)); }
+        update();
+      }
     });
     [[el.kvaSel, el.kva], [el.v1, el.v1m], [el.v2, el.v2m]].forEach(function (p) {
       p[0].addEventListener('change', function () {

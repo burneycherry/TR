@@ -490,7 +490,9 @@
   // JIS の対象は 6kV 配電用（v1Range）。それ以外の高圧は同じ結線を参考表示、低圧/低圧は代表例（二次 300V 以下 Yd1、超 Dyn11）
   // 表19 で2通りある容量（750・1000kVA）は日立標準（ST-156）の結線を先頭にする
   // opts.wires：単相 2|3（既定 3）、opts.conn：三相3線で選択した結線（空＝代表例）。JIS 外の選択は注意を付ける
-  const CONN_NAMES = { Yy0: 'Y-Y（Yy0）', Yd1: 'Y-Δ（Yd1）', Dd0: 'Δ-Δ（Dd0）', Dyn11: 'Δ-Y（Dyn11）' };
+  const CONN_NAMES = { Yy0: 'Y-Y（Yy0）', Yd1: 'Y-Δ（Yd1）', Dd0: 'Δ-Δ（Dd0）', Dyn11: 'Δ-Y（Dyn11）', Yyn0: 'Y-Y 中性点付き（Yyn0）', Vv0: 'V-V（単相変圧器2台）' };
+  // 選べる結線：三相3線／三相4線（中性点が必要）
+  const CONN_OPTIONS = { three: ['Yy0', 'Yd1', 'Dd0', 'Dyn11', 'Vv0'], three4w: ['Dyn11', 'Yyn0'] };
   function jisWinding(mode, kva, v1, v2, freq, opts) {
     const o = opts || {};
     const J = D.jisTr;
@@ -502,12 +504,15 @@
     const v1Ok = v1 >= J.v1Range[0] && v1 <= J.v1Range[1];
     if (mode === 'single') {
       const w2 = o.wires === 2;
-      if (lv) { return { codes: [w2 ? '単相2線' : '単三'], std: false, lv: true, notes: [] }; }
+      // 単相2線 210V は JIS の単三専用変圧器（210-105V）の u-v 間を使用（o は中性点として B種接地）
+      const w2jis = w2 && !lv && v2 === 210;
+      const code = w2 ? (w2jis ? '単三u-v' : '単相2線') : '単三';
+      if (lv) { return { codes: [code], std: false, lv: true, notes: [] }; }
       if (!v1Ok) { notes.push('JIS C 4304/4306 は 6kV 配電用です（一次 ' + v1 + 'V は対象外、結線は参考）。'); }
       const capOk = J.capacities.single.indexOf(kva) >= 0;
       if (!capOk) { notes.push('容量 ' + kva + 'kVA は JIS 表3 の定格容量外です。'); }
-      if (w2) { notes.push('JIS 表18 の単相結線は単三専用結線（210-105V）です。単相2線は JIS 標準外です。'); } else if (v2 !== 210) { notes.push('JIS 表5 の単相定格二次電圧は 210-105V です。'); }
-      return { codes: [w2 ? '単相2線' : '単三'], std: v1Ok && capOk && !w2 && v2 === 210, lv: false, notes: notes };
+      if (v2 !== 210) { notes.push('JIS 表5 の単相定格二次電圧は 210-105V（表18 単三専用結線）です。' + (w2 ? '単相2線 ' + v2 + 'V は JIS 標準外です。' : '')); }
+      return { codes: [code], std: v1Ok && capOk && v2 === 210, lv: false, notes: notes };
     }
     // 三相：代表例（auto）を決める
     let auto, allowed, hc = null;
@@ -524,8 +529,10 @@
       hc = pick(H.conn210);
       if (auto.length > 1 && auto.indexOf(hc) > 0) { auto.splice(auto.indexOf(hc), 1); auto.unshift(hc); }
     }
+    if (o.n) { auto = ['Dyn11']; }
     allowed = auto.slice();
-    const sel = o.conn && CONN_NAMES[o.conn] && !o.n ? o.conn : null;
+    const opts2 = CONN_OPTIONS[o.n ? 'three4w' : 'three'];
+    const sel = o.conn && opts2.indexOf(o.conn) >= 0 ? o.conn : null;
     const codes = sel ? [sel] : auto;
     const res = { codes: codes, auto: auto, selected: !!sel, hitachi: sel ? null : hc, lv: lv, notes: notes };
     if (lv) {
@@ -533,6 +540,14 @@
       return res;
     }
     if (!v1Ok) { notes.push('JIS C 4304/4306 は 6kV 配電用です（一次 ' + v1 + 'V は対象外、結線は参考）。'); }
+    if (sel === 'Vv0') {
+      // V結線：JIS の単相変圧器（単三専用 210-105V）2台の u-v 間を使う。三相変圧器の表19 の対象外
+      const capS = J.capacities.single.indexOf(kva) >= 0;
+      if (!capS) { notes.push('容量 ' + kva + 'kVA（1台あたり）は JIS 表3 の単相定格容量外です。'); }
+      if (v2 !== 210) { notes.push('JIS 表5 の単相定格二次電圧は 210-105V です（V結線の線間 ' + v2 + 'V は標準外）。'); }
+      res.std = v1Ok && capS && v2 === 210;
+      return res;
+    }
     const capOk = J.capacities.three.indexOf(kva) >= 0;
     if (!capOk) { notes.push('容量 ' + kva + 'kVA は JIS 表3 の定格容量外です（結線は容量範囲による代表例）。'); }
     const selOut = sel && allowed.indexOf(sel) < 0;
@@ -589,34 +604,41 @@
       throw new Error('容量・一次電圧・二次電圧を正しく入力してください。');
     }
     const trType = input.trType === 'mold' ? 'mold' : 'oil';
-    const kva1 = mode === 'three' && Number(input.kva1) > 0 ? Number(input.kva1) : 0;
+    // V結線（三相3線・単相変圧器2台）：kva は1台あたり。線電流＝1台の定格電流（三相出力 √3×kva）
+    // %Z・電源側%Z・ヒューズ・一次ブレーカー・EB は単相1台分で扱う（um = 'single'）
+    const vv = mode === 'three' && input.conn === 'Vv0' && input.uiMode !== 'three4w';
+    const um = vv ? 'single' : mode;
+    const kva1 = mode === 'three' && !vv && Number(input.kva1) > 0 ? Number(input.kva1) : 0;
     const hv = v1 > LV_MAX;
     const zInput = Number(input.z);
-    const zTr = zInput > 0 ? zInput : defaultZ(mode, kva, v2, trType, input.freq);
+    const zTr = zInput > 0 ? zInput : defaultZ(um, kva, v2, trType, input.freq);
     const iscIn = Number(input.iscKa) > 0 ? Number(input.iscKa) : 0;
-    const zSrc = sourceZ(mode, kva, v1, iscIn);
+    const zSrc = sourceZ(um, kva, v1, iscIn);
     const zTotal = zTr + zSrc;
 
     const circuits = mode === 'scott' ? 2 : 1;
-    const i1 = ratedCurrent(mode === 'single' ? 1 : 3, kva, v1);
+    const i1 = ratedCurrent(um === 'single' ? 1 : 3, kva, v1);
     // スコットは M座・T座 各 kVA/2 の単相回路
-    const i2 = mode === 'three' ? ratedCurrent(3, kva, v2) : ratedCurrent(1, kva / circuits, v2);
+    const i2 = um === 'three' ? ratedCurrent(3, kva, v2) : ratedCurrent(1, kva / circuits, v2);
     const iscKa = i2 * 100 / zTotal / 1000;
 
-    const fuse = hv ? selectFuse(mode, kva, v1, trType, kva1) : null;
+    const fuse = hv ? selectFuse(um, kva, v1, trType, kva1) : null;
+    if (fuse && vv) { fuse.warn.push('V結線用の選定表はありません。単相 ' + kva + 'kVA 1台分の行を参考表示しています（2台を1組の LBS で開閉する場合はメーカーに確認）。'); }
     let primaryBreaker = null;
     if (!hv) {
       primaryBreaker = selectBreaker(i1 * D.breaker.primaryFactor, iscIn, v1);
-      primaryBreaker.catalog = selectPrimaryMitsubishi(mode, kva, v1);
-      primaryBreaker.fujiCatalog = selectPrimaryFuji(mode, kva, v1, iscIn);
+      primaryBreaker.catalog = selectPrimaryMitsubishi(um, kva, v1);
+      primaryBreaker.fujiCatalog = selectPrimaryFuji(um, kva, v1, iscIn);
+      primaryBreaker.vv = vv;
       primaryBreaker.iscGiven = iscIn > 0;
     }
     const ct = selectCT(i2);
     const thr = selectTHR(i2, ct.primary);
     // 遮断容量の基準：キュービクルは JIS C 4620 解説表1 を優先（適用できない条件は計算値）
     // JIS C 4620 解説表1 を優先し、JIS に無い範囲は認定の手引き 補足表1 で補完（ユーザー指定）
-    const jisOnly = input.iscBasis === 'calc' ? null : jisRow(mode, kva, v1, v2, input.freq);
-    const guide = input.iscBasis === 'calc' ? null : guideRow(mode, kva, v1, v2);
+    // V結線は JIS C 4620・認定の手引きの表の対象外 → 計算値
+    const jisOnly = input.iscBasis === 'calc' || vv ? null : jisRow(mode, kva, v1, v2, input.freq);
+    const guide = input.iscBasis === 'calc' || vv ? null : guideRow(mode, kva, v1, v2);
     const jis = jisOnly || guide;
     const iscRef = jisOnly ? guide : null; // 両表がある範囲は手引きの値も参考表示
     const brk = input.mainBreaker ? selectBreaker(i2 * D.breaker.factor, iscKa, v2, jis) : null;
@@ -635,20 +657,20 @@
     const ebMax = brk ? design : (maxBranchRating(i2) || i2);
 
     return {
-      input: { mode: mode, kva: kva, v1: v1, v2: v2, trType: trType, kva1: kva1 },
+      input: { mode: mode, kva: kva, v1: v1, v2: v2, trType: trType, kva1: kva1, vv: vv, kvaOut: vv ? kva * Math.sqrt(3) : kva },
       winding: jisWinding(mode, kva, v1, v2, input.freq, { wires: Number(input.wires) === 2 ? 2 : 3, conn: input.conn, n: input.uiMode === 'three4w' }),
       hv: hv, circuits: circuits,
       z: { tr: zTr, trIsDefault: !(zInput > 0), src: zSrc, total: zTotal },
       i1: i1, i2: i2, iscKa: iscKa, jis: jis, iscRef: iscRef,
       fuse: fuse, primaryBreaker: primaryBreaker, ct: ct, thr: thr, breaker: brk, branch: branch,
       conductor: { design: design, byBreaker: !!brk, cable: selectCable(design, D.busCable.tables), busbar: selectBusbar(design) },
-      eb: Object.assign(selectEB(mode, kva, v2, ebMax), { maxA: ebMax, maxByMain: !!brk, i2: i2 })
+      eb: Object.assign(selectEB(um, kva, v2, ebMax), { maxA: ebMax, maxByMain: !!brk, i2: i2, vv: vv })
     };
   }
 
   const api = {
     calculate: calculate, ratedCurrent: ratedCurrent, defaultZ: defaultZ, sourceZ: sourceZ,
-    pickAtLeast: pickAtLeast, todoRow: todoRow, selectPrimaryMitsubishi: selectPrimaryMitsubishi, selectPrimaryFuji: selectPrimaryFuji, jisWinding: jisWinding, CONN_NAMES: CONN_NAMES, tapTable: tapTable, jisRow: jisRow, guideRow: guideRow, jisAt: jisAt, todoSplit: todoSplit, selectCable: selectCable, selectBusbar: selectBusbar,
+    pickAtLeast: pickAtLeast, todoRow: todoRow, selectPrimaryMitsubishi: selectPrimaryMitsubishi, selectPrimaryFuji: selectPrimaryFuji, jisWinding: jisWinding, CONN_NAMES: CONN_NAMES, CONN_OPTIONS: CONN_OPTIONS, tapTable: tapTable, jisRow: jisRow, guideRow: guideRow, jisAt: jisAt, todoSplit: todoSplit, selectCable: selectCable, selectBusbar: selectBusbar,
     selectBreaker: selectBreaker, selectBranch: selectBranch, selectCT: selectCT, selectTHR: selectTHR, selectFuse: selectFuse,
     selectEB: selectEB, data: D
   };

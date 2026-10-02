@@ -651,3 +651,37 @@ test('灯動は JIS 結線判定の対象外', () => {
   const r = C.calculate({ mode: 'todo', kva: 100, v1: 6600, v2: 210, todoMaker: 'hitachi' });
   assert.strictEqual(r.winding, null);
 });
+
+test('V結線（単相変圧器2台）：線電流＝1台の定格電流、単相1台分の %Z・EB', () => {
+  const r = C.calculate({ mode: 'three', uiMode: 'three', kva: 50, v1: 6600, v2: 210, conn: 'Vv0' });
+  assert.strictEqual(r.input.vv, true);
+  near(r.input.kvaOut, 50 * Math.sqrt(3), 1e-9);
+  near(r.i2, 50000 / 210, 1e-9); // 238.1A
+  near(r.i1, 50000 / 6600, 1e-9);
+  assert.strictEqual(r.z.tr, C.defaultZ('single', 50, 210)); // 単相 %Z
+  assert.strictEqual(r.jis, null); // JIS C 4620 表の対象外 → 計算値
+  assert.strictEqual(r.eb.phaseKva, 50); // 一相分容量＝1台分
+  assert.deepStrictEqual(r.winding.codes, ['Vv0']);
+  assert.strictEqual(r.winding.std, true); // 単相 50kVA・210V（JIS 単三変圧器2台）
+  assert.ok(r.fuse.warn.some((w) => w.indexOf('V結線') >= 0));
+});
+
+test('三相4線 Y-Y（Yyn0）は選択可・JIS 外の注意、三相3線では選べない', () => {
+  const y = C.calculate({ mode: 'three', uiMode: 'three4w', kva: 300, v1: 6600, v2: 420, conn: 'Yyn0' });
+  assert.deepStrictEqual(y.winding.codes, ['Yyn0']);
+  assert.strictEqual(y.winding.std, false);
+  assert.ok(y.winding.notes.some((n) => n.indexOf('JIS 標準外') >= 0));
+  const t3 = C.calculate({ mode: 'three', uiMode: 'three', kva: 300, v1: 6600, v2: 210, conn: 'Yyn0' });
+  assert.deepStrictEqual(t3.winding.codes, ['Yd1']); // 三相3線の選択肢に無い → 代表例
+  const n4 = C.calculate({ mode: 'three', uiMode: 'three4w', kva: 300, v1: 6600, v2: 420, conn: 'Vv0' });
+  assert.deepStrictEqual(n4.winding.codes, ['Dyn11']);
+  assert.strictEqual(n4.input.vv, false);
+});
+
+test('単相2線 210V は JIS 単三変圧器の u-v 使用（JIS 内）、105V は JIS 外', () => {
+  const a = C.calculate({ mode: 'single', kva: 50, v1: 6600, v2: 210, wires: 2 });
+  assert.deepStrictEqual(a.winding.codes, ['単三u-v']);
+  assert.strictEqual(a.winding.std, true);
+  const b = C.calculate({ mode: 'single', kva: 50, v1: 6600, v2: 105, wires: 2 });
+  assert.strictEqual(b.winding.std, false);
+});
