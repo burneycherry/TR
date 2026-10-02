@@ -712,3 +712,23 @@ test('異容量V-V結線：日本電気技術者協会 第2表・第1表の計�
   const pct = C.vvxSplit(100, 50, 'pct', 50, null, null, true);
   near(pct.three, 43.3, 0.05);
 });
+
+test('エナジーサポート（NGK）限流ヒューズ：選定ページの表・判定と照合', () => {
+  const E = C.data.lbs.makers.energys;
+  const v = (m, k, k1, vo) => { const r = C.fuseEnergys(E, m, k, 6600, k1 || 0, vo); return r.ok ? r.value : null; };
+  assert.strictEqual(v('single', 50), 'PFG-1Sシリーズ 20A／PFU-1 20A');
+  assert.strictEqual(v('single', 60), 'PFG-1Sシリーズ 30A／PFU-1 25A'); // 直近上位 75kVA
+  assert.strictEqual(v('three', 300), 'PFG-1Sシリーズ 40A／PFU-1 40A');
+  assert.strictEqual(v('three', 10), null); // 3φ10kVA は該当なし（QC-1 は PC 用で除外）
+  assert.strictEqual(v('three', 750), 'PFG-1Sシリーズ 75A／PFG-1 75A／PFU-1 75A');
+  assert.strictEqual(v('single', 50, 0, { vv: 50 }), 'PFG-1Sシリーズ 20A'); // 同容量V
+  assert.strictEqual(v('single', 100, 0, { vvx: [100, 50] }), 'PFG-1Sシリーズ 30A'); // 変則V
+  assert.strictEqual(v('single', 300, 0, { vvx: [300, 200] }), 'PFG-1Sシリーズ 60A');
+  assert.strictEqual(v('three', 100, 50), 'PFG-1Sシリーズ 30A'); // 1φ50＋3φ100 一括
+  assert.strictEqual(C.fuseEnergys(E, 'three', 300, 3300, 0, null).ok, false); // 6.6kV のみ
+  // 計算に組み込まれていること
+  const r = C.calculate({ mode: 'three', uiMode: 'three', conn: 'Vvx', kva: 100, kvaB: 50, v1: 6600, v2: 210 });
+  assert.strictEqual(r.fuse.energys.value, 'PFG-1Sシリーズ 30A');
+  const t = C.calculate({ mode: 'three', kva: 300, v1: 6600, v2: 210, kva1: 50 });
+  assert.ok(t.fuse.energys.method.indexOf('一括') >= 0);
+});

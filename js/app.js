@@ -561,9 +561,19 @@
         t.push('LBSヒューズ(富士): ' + fu.value + '（' + fu.model + '）');
       }
       fb += row(esc(fu.name), fv);
-      fb += '</table><p class="sub-note">三菱：' + esc(mi.note) + '<br>富士：' + esc(fu.note) + '</p>';
+      const es = f.energys;
+      let ev;
+      if (!es.ok) {
+        ev = '<strong>' + esc(es.msg) + '</strong>' + (es.method ? '<br>' + note(esc(es.method)) : '');
+        t.push('LBSヒューズ(エナジーサポート): ' + es.msg);
+      } else {
+        ev = es.items.map(function (x) { return '<strong>' + esc(x.model) + ' ' + x.value + 'A</strong>'; }).join('<br>') + '<br>' + note(esc(es.method));
+        t.push('LBSヒューズ(エナジーサポート): ' + es.value);
+      }
+      fb += row(esc(es.name), ev);
+      fb += '</table><p class="sub-note">三菱：' + esc(mi.note) + '<br>富士：' + esc(fu.note) + '<br>エナジーサポート：' + esc(es.note) + '</p>';
       f.warn.forEach(function (w) { fb += '<div class="warn">' + esc(w) + '</div>'; });
-      html += card('LBS 限流ヒューズ（一次側）', fb, mi.verified === false || fu.verified === false);
+      html += card('LBS 限流ヒューズ（一次側）', fb, mi.verified === false || fu.verified === false || es.verified === false);
     }
     if (r.primaryBreaker) {
       const pb = r.primaryBreaker;

@@ -7,7 +7,7 @@
  * .claude/skills/update-maker-data/SKILL.md を参照。
  */
 var TR_DATA = {
-  version: '2026-10-03c',
+  version: '2026-10-03d',
 
   // 標準容量 [kVA]（入力候補）
   capacities: {
@@ -459,6 +459,86 @@ var TR_DATA = {
           }
         },
         note: 'トップランナー変圧器の励磁突入電流基準、二次210Vで検討、三相容量の1/3以下の進相コンデンサ接続を想定。高圧電動機負荷には使用不可。',
+        verified: true
+      },
+      // エナジーサポート（NGKグループ）ヒューズ選定「6.6kV 回路 トランス保護」限流ヒューズ
+      // https://www.energys.co.jp/equipment/search/fuse/prot66trans/（選定ページのスクリプト resource/js/fuse/prot66trans.js の表をそのまま転記、PC 用 QC-1 は除外）
+      // 値はヒューズ定格電流 [A]、null＝該当なし。6.6kV のみ。表にない容量は直近上位（下位側のセルも該当ありの場合のみ、選定ページと同じ判定）
+      // LBS：PFG-1Sシリーズ 10〜60A は PFS-201M、75・100A は PFS-205M。PFU-1 は PFV-1・PFD-1U
+      energys: {
+        name: 'エナジーサポート（NGK）',
+        series: '限流ヒューズ PFG-1S・PFG-1・PFU-1',
+        source: 'エナジーサポート ヒューズ選定「6.6kV 回路 トランス保護」',
+      single: [
+        ['PFG-1Sシリーズ', [10, 15, 20, 30, 50, 75, 100, 150, 200, 250, 300, 400, 500], [10, 10, 20, 20, 20, 30, 30, 40, 40, 50, 60, 75, 100]],
+        ['PFG-1', [10, 15, 20, 30, 50, 75, 100, 150, 200, 250, 300, 400, 500], [null, null, null, null, null, null, null, null, null, null, null, 75, 100]],
+        ['PFU-1', [10, 15, 20, 30, 50, 75, 100, 150, 200, 250, 300, 400, 500], [7, 7, 10, 10, 20, 25, 25, 30, 40, 50, 60, 75, 100]]
+      ],
+      three: [
+        ['PFG-1Sシリーズ', [10, 15, 20, 30, 50, 75, 100, 150, 200, 250, 300, 400, 500, 750, 1000], [null, 10, 10, 10, 20, 20, 20, 30, 30, 40, 40, 50, 60, 75, 100]],
+        ['PFG-1', [10, 15, 20, 30, 50, 75, 100, 150, 200, 250, 300, 400, 500, 750, 1000], [null, null, null, null, null, null, null, null, null, null, null, null, null, 75, null]],
+        ['PFU-1', [10, 15, 20, 30, 50, 75, 100, 150, 200, 250, 300, 400, 500, 750, 1000], [null, 7, 7, 7, 10, 10, 15, 20, 25, 30, 40, 50, 50, 75, 100]]
+      ],
+      // 変則V結線：列＝大きい方の1φ容量、行＝小さい方
+      vx: [
+        { model: 'PFG-1Sシリーズ', cols: [0, 10, 20, 30, 50, 75, 100, 150, 200, 300, 500], rows: [
+          [10, null, 10, 20, 20, 20, 30, 30, 40, 40, 60, 100],
+          [20, null, null, 20, 20, 20, 30, 30, 40, 40, 60, 100],
+          [30, null, null, null, 20, 20, 30, 30, 40, 40, 60, 100],
+          [50, null, null, null, null, 20, 30, 30, 40, 40, 60, 100],
+          [75, null, null, null, null, null, 30, 30, 40, 40, 60, 100],
+          [100, null, null, null, null, null, null, 30, 40, 40, 60, 100],
+          [150, null, null, null, null, null, null, null, 40, 40, 60, 100],
+          [200, null, null, null, null, null, null, null, null, 50, 60, 100],
+          [300, null, null, null, null, null, null, null, null, null, 75, null],
+          [500, null, null, null, null, null, null, null, null, null, null, null]
+        ] },
+        { model: 'PFG-1', cols: [0, 10, 20, 30, 50, 75, 100, 150, 200, 300, 500], rows: [
+          [10, null, null, null, null, null, null, null, null, null, null, 100],
+          [20, null, null, null, null, null, null, null, null, null, null, 100],
+          [30, null, null, null, null, null, null, null, null, null, null, 100],
+          [50, null, null, null, null, null, null, null, null, null, null, 100],
+          [75, null, null, null, null, null, null, null, null, null, null, 100],
+          [100, null, null, null, null, null, null, null, null, null, null, 100],
+          [150, null, null, null, null, null, null, null, null, null, null, 100],
+          [200, null, null, null, null, null, null, null, null, null, null, 100],
+          [300, null, null, null, null, null, null, null, null, null, 75, null],
+          [500, null, null, null, null, null, null, null, null, null, null, null]
+        ] }
+      ],
+      // 1φ＋3φ一括：列＝1φ容量、行＝3φ容量
+      combo: [
+        { model: 'PFG-1Sシリーズ', cols: [0, 10, 20, 30, 50, 75, 100, 150, 200, 300, 500], rows: [
+          [0, null, 10, 20, 20, 20, 30, 30, 40, 40, 60, 100],
+          [10, null, 10, 20, 20, 20, 30, 30, 40, 50, 60, 100],
+          [20, 10, 20, 20, 20, 20, 30, 30, 40, 50, 60, 100],
+          [30, 10, 20, 20, 20, 20, 30, 30, 40, 50, 60, 100],
+          [50, 20, 20, 20, 20, 30, 30, 30, 40, 50, 60, 100],
+          [75, 20, 20, 20, 30, 30, 30, 40, 40, 50, 75, 100],
+          [100, 20, 20, 30, 30, 30, 30, 40, 50, 60, 75, 100],
+          [150, 30, 30, 30, 30, 30, 40, 40, 50, 60, 75, 100],
+          [200, 30, 30, 30, 40, 40, 40, 50, 60, 60, 75, null],
+          [300, 40, 40, 40, 50, 50, 50, 60, 60, 75, 100, null],
+          [500, 60, 60, 60, 60, 75, 75, 75, 100, 100, 100, null],
+          [750, 75, 100, 100, 100, 100, 100, 100, 100, null, null, null],
+          [1000, 100, 100, null, null, null, null, null, null, null, null, null]
+        ] },
+        { model: 'PFG-1', cols: [0, 10, 20, 30, 50, 75, 100, 150, 200, 300, 500], rows: [
+          [0, null, null, null, null, null, null, null, null, null, null, 100],
+          [10, null, null, null, null, null, null, null, null, null, null, 100],
+          [20, null, null, null, null, null, null, null, null, null, null, 100],
+          [30, null, null, null, null, null, null, null, null, null, null, 100],
+          [50, null, null, null, null, null, null, null, null, null, null, null],
+          [75, null, null, null, null, null, null, null, null, null, 75, null],
+          [100, null, null, null, null, null, null, null, null, null, 75, null],
+          [150, null, null, null, null, null, null, null, null, null, 75, null],
+          [200, null, null, null, null, null, null, null, null, null, 75, null],
+          [300, null, null, null, null, null, null, null, null, 75, 100, null],
+          [500, null, null, null, null, 75, 75, 75, 100, 100, null, null],
+          [750, 75, 100, 100, 100, 100, 100, 100, null, null, null, null]
+        ] }
+      ],
+        note: '6.6kV 回路 トランス保護の選定（限流ヒューズ）。PFG-1Sシリーズ 10〜60A は LBS PFS-201M、75・100A は PFS-205M 用。',
         verified: true
       }
     }

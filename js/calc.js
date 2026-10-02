@@ -103,7 +103,60 @@
     return { ok: true, model: t.model, method: where, value: 'G' + g + 'A', approx: approx };
   }
 
-  function selectFuse(mode, kva, v1, trType, kva1) {
+  // エナジーサポート（NGK）選定表の引き方（選定ページ runSearch01/02 と同じ判定）
+  // 表にない値は直近上位の列・行。ただし補間元（下位側）のセルも該当ありのときだけ採用
+  function esLook1(caps, vals, p) {
+    for (let j = 0; j < caps.length; j++) {
+      if (p <= caps[j]) {
+        const exact = p === caps[j];
+        if (j === 0 && !exact) { return null; }
+        if ((exact || vals[j - 1] !== null) && vals[j] !== null) { return { value: vals[j], at: caps[j], exact: exact }; }
+        return null;
+      }
+    }
+    return null;
+  }
+  function esLook2(t, p1, p2) {
+    let ci = -1;
+    for (let j = 0; j < t.cols.length; j++) { if (p1 <= t.cols[j]) { ci = j; break; } }
+    if (ci < 0) { return null; }
+    const ce = p1 === t.cols[ci];
+    if (ci === 0 && !ce) { return null; }
+    for (let k = 0; k < t.rows.length; k++) {
+      if (p2 <= t.rows[k][0]) {
+        const re = p2 === t.rows[k][0];
+        if (k === 0 && !re) { return null; }
+        const v = t.rows[k][ci + 1];
+        if (v === null) { return null; }
+        if (!ce && t.rows[k][ci] === null) { return null; }
+        if (!re && t.rows[k - 1][ci + 1] === null) { return null; }
+        return { value: v, col: t.cols[ci], row: t.rows[k][0], exact: ce && re };
+      }
+    }
+    return null;
+  }
+  // mode：single|three（スコット・灯動は三相表）、kva1：LBS 共用単相、vopt：{ vv: 1台 kVA } 同容量V／{ vvx: [共用, 専用] } 異容量V
+  function fuseEnergys(E, mode, kva, vc, kva1, vopt) {
+    if (vc !== 6600) { return { ok: false, msg: '6.6kV 以外は選定表の対象外' }; }
+    let items = [];
+    let method;
+    if (vopt && (vopt.vv || vopt.vvx)) {
+      const big = vopt.vv ? vopt.vv : Math.max(vopt.vvx[0], vopt.vvx[1]);
+      const small = vopt.vv ? vopt.vv : Math.min(vopt.vvx[0], vopt.vvx[1]);
+      method = (vopt.vv ? '同容量' : '変則') + 'V結線表（大 ' + big + 'kVA × 小 ' + small + 'kVA）';
+      E.vx.forEach(function (t) { const h = esLook2(t, big, small); if (h) { items.push({ model: t.model, value: h.value }); } });
+    } else if (mode !== 'single' && kva1 > 0) {
+      method = '1φ＋3φ一括表（1φ ' + kva1 + 'kVA × 3φ ' + kva + 'kVA）';
+      E.combo.forEach(function (t) { const h = esLook2(t, kva1, kva); if (h) { items.push({ model: t.model, value: h.value }); } });
+    } else {
+      const tbl = mode === 'single' ? E.single : E.three;
+      method = (mode === 'single' ? '1φ' : '3φ') + '表（' + kva + 'kVA）';
+      tbl.forEach(function (t) { const h = esLook1(t[1], t[2], kva); if (h) { items.push({ model: t[0], value: h.value, at: h.at, exact: h.exact }); } });
+    }
+    if (!items.length) { return { ok: false, method: method, msg: '表の範囲外（該当なし）' }; }
+    return { ok: true, method: method, items: items, value: items.map(function (x) { return x.model + ' ' + x.value + 'A'; }).join('／') };
+  }
+  function selectFuse(mode, kva, v1, trType, kva1, vopt) {
     const L = D.lbs;
     const vc = fuseVoltClass(v1);
     const warn = [];
@@ -116,7 +169,9 @@
       mitsubishi: Object.assign({ name: L.makers.mitsubishi.name, series: L.makers.mitsubishi.series, note: L.makers.mitsubishi.note, verified: L.makers.mitsubishi.verified },
         fuseMitsubishi(L.makers.mitsubishi, mode, kva, vc, i3, kva1, i1s)),
       fuji: Object.assign({ name: L.makers.fuji.name, series: L.makers.fuji.series, note: L.makers.fuji.note, verified: L.makers.fuji.verified },
-        fuseFuji(L.makers.fuji, mode, kva, vc, trType, kva1))
+        fuseFuji(L.makers.fuji, mode, kva, vc, trType, kva1)),
+      energys: Object.assign({ name: L.makers.energys.name, series: L.makers.energys.series, note: L.makers.energys.note, verified: L.makers.energys.verified },
+        fuseEnergys(L.makers.energys, mode, kva, vc, kva1, vopt))
     };
   }
 
@@ -512,7 +567,10 @@
     const gov = sc[0].isc >= sc[1].isc ? sc[0] : sc[1];
     // 一次側・LBS・タップは共用変圧器（単相）で選定
     const base = calculate(Object.assign({}, input, { mode: 'single', conn: '', kva: tk, kva1: 0 }));
-    if (base.fuse) { base.fuse.warn.push('V結線用の選定表はありません。共用変圧器 単相 ' + tk + 'kVA の行を参考表示しています（専用 ' + ts + 'kVA と1組の LBS で開閉する場合はメーカーに確認）。'); }
+    if (base.fuse) {
+      base.fuse.energys = Object.assign({}, base.fuse.energys, fuseEnergys(D.lbs.makers.energys, 'single', tk, fuseVoltClass(v1), 0, { vvx: [tk, ts] }));
+      base.fuse.warn.push('三菱・富士は V結線用の選定表がないため共用変圧器 単相 ' + tk + 'kVA の行を参考表示しています（エナジーサポートは変則V結線の表で選定）。');
+    }
     const sub = Object.assign({}, input, { conn: '', kva1: 0, iscBasis: 'calc', iscOverride: gov.isc, z: gov.tr });
     const c3 = calculate(Object.assign({}, sub, { mode: 'three', kva: split.three }));
     const c1 = calculate(Object.assign({}, sub, { mode: 'single', kva: split.single }));
@@ -724,8 +782,8 @@
     // iscOverride：異容量V結線の各回路は変圧器端子短絡の値を使う
     const iscKa = Number(input.iscOverride) > 0 ? Number(input.iscOverride) : i2 * 100 / zTotal / 1000;
 
-    const fuse = hv ? selectFuse(um, kva, v1, trType, kva1) : null;
-    if (fuse && vv) { fuse.warn.push('V結線用の選定表はありません。単相 ' + kva + 'kVA 1台分の行を参考表示しています（2台を1組の LBS で開閉する場合はメーカーに確認）。'); }
+    const fuse = hv ? selectFuse(um, kva, v1, trType, kva1, vv ? { vv: kva } : null) : null;
+    if (fuse && vv) { fuse.warn.push('三菱・富士は V結線用の選定表がないため単相 ' + kva + 'kVA 1台分の行を参考表示しています（エナジーサポートは V結線の表で選定）。'); }
     let primaryBreaker = null;
     if (!hv) {
       primaryBreaker = selectBreaker(i1 * D.breaker.primaryFactor, iscIn, v1);
@@ -773,7 +831,7 @@
   const api = {
     calculate: calculate, ratedCurrent: ratedCurrent, defaultZ: defaultZ, sourceZ: sourceZ,
     pickAtLeast: pickAtLeast, todoRow: todoRow, selectPrimaryMitsubishi: selectPrimaryMitsubishi, selectPrimaryFuji: selectPrimaryFuji, vvxSplit: vvxSplit, jisWinding: jisWinding, CONN_NAMES: CONN_NAMES, CONN_OPTIONS: CONN_OPTIONS, tapTable: tapTable, jisRow: jisRow, guideRow: guideRow, jisAt: jisAt, todoSplit: todoSplit, selectCable: selectCable, selectBusbar: selectBusbar,
-    selectBreaker: selectBreaker, selectBranch: selectBranch, selectCT: selectCT, selectTHR: selectTHR, selectFuse: selectFuse,
+    selectBreaker: selectBreaker, selectBranch: selectBranch, selectCT: selectCT, selectTHR: selectTHR, selectFuse: selectFuse, fuseEnergys: fuseEnergys,
     selectEB: selectEB, data: D
   };
   root.TRCalc = api;
