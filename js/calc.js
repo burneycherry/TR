@@ -356,7 +356,7 @@
     const T = D.primaryBrk.tables;
     const ph = mode === 'single' ? 'single' : 'three';
     const vk = v1 >= 200 && v1 <= 220 ? 210 : (v1 >= 380 && v1 <= 460 ? 420 : 0);
-    const res = { name: D.primaryBrk.name, notes: D.primaryBrk.notes, table: vk ? (ph === 'single' ? '単相' : '三相') + vk + 'V' : null, row: null };
+    const res = { scott: mode === 'scott', name: D.primaryBrk.name, notes: D.primaryBrk.notes, table: vk ? (ph === 'single' ? '単相' : '三相') + vk + 'V' : null, row: null };
     if (!vk) { return res; }
     const rows = T[ph + vk];
     for (let i = 0; i < rows.length; i++) {
@@ -377,7 +377,7 @@
     const F = D.fujiPrimary;
     const ph = mode === 'single' ? 'single' : 'three';
     const vk = v1 >= 380 && v1 <= 460 ? 440 : (v1 >= 200 && v1 <= 220 ? 220 : 0);
-    const res = { name: F.name, notes: F.notes, table: vk ? (ph === 'single' ? '単相' : '三相') + vk + 'V' : null, col: null };
+    const res = { scott: mode === 'scott', name: F.name, notes: F.notes, table: vk ? (ph === 'single' ? '単相' : '三相') + vk + 'V' : null, col: null };
     if (!vk) { return res; }
     const t = F.tables[ph + vk];
     let ci = -1;

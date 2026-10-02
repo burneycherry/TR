@@ -219,17 +219,19 @@
       name = '単相 単三（中性点 o 接地）';
       outs = ['単相3線', v2 + '/' + (v2 / 2) + 'V'];
     } else if (m === 'scott') {
-      const yb = Y0 + 14;
-      ln(P - R, yb, P + R, yb); ln(P, yb, P, yb - 1.6 * R); dot(P - R, yb); dot(P + R, yb); dot(P, yb - 1.6 * R);
-      tx(P - R, yb + 13, 'U'); tx(P + R, yb + 13, 'W'); tx(P, yb - 1.6 * R - 5, 'V');
-      tx(P, yb + 26, 'M座(U-W)・T座(V)');
-      [S - 16, S + 24].forEach(function (x, i) {
-        ln(x, Y0 - R, x, Y0 + R); dot(x, Y0 - R); dot(x, Y0); dot(x, Y0 + R);
-        tx(x, Y0 - R - 6, i === 0 ? 'M座' : 'T座');
-        ln(x, Y0, x + 10, Y0); ln(x + 10, Y0, x + 10, Y0 + R + 14);
-      });
-      ln(S - 6, Y0 + R + 14, S + 34, Y0 + R + 14); gnd(S + 14, Y0 + R + 14);
-      name = 'スコット結線（二次 M座・T座 各単相3線、各中点接地）';
+      // 一次：V—U 水平（M座）、W は中点から垂直（T座）。二次：u2-02-v2 垂直と v1-01-u1 水平の直交（三菱 L-10034-H ベクトル図）
+      const yb = Y0 + 22;
+      ln(P - R, yb, P + R, yb); ln(P, yb, P, yb - 1.6 * R);
+      dot(P - R, yb); dot(P + R, yb); dot(P, yb - 1.6 * R); dot(P, yb);
+      tx(P - R - 6, yb + 4, 'V', 'end'); tx(P + R + 6, yb + 4, 'U', 'start'); tx(P, yb - 1.6 * R - 6, 'W');
+      const xv = S - 36, yt = Y0 - 36, yu = Y0 + 16;
+      ln(xv, yt, xv, yu); dot(xv, yt); dot(xv, (yt + yu) / 2); dot(xv, yu);
+      tx(xv - 6, yt + 4, 'v2', 'end'); tx(xv - 6, (yt + yu) / 2 + 4, '02', 'end'); tx(xv - 6, yu + 4, 'u2', 'end');
+      const xh0 = xv + 12, xh1 = xv + 76, yh = yu + 8;
+      ln(xh0, yh, xh1, yh); dot(xh0, yh); dot((xh0 + xh1) / 2, yh); dot(xh1, yh);
+      tx(xh0, yh + 14, 'v1'); tx((xh0 + xh1) / 2, yh + 14, '01'); tx(xh1, yh + 14, 'u1');
+      ln(xh0, yu - 6, xh0 + 6, yu - 6); ln(xh0 + 6, yu - 6, xh0 + 6, yu); // 直角記号
+      name = 'スコット結線（一次 T結線、二次 2回路は90°位相差。各座 単相3線、接地は u2・v2 または中点 01・02：カタログ・仕様書で確認）';
       outs = ['単相3線×2', v2 + '/' + (v2 / 2) + 'V'];
     } else if (m === 'todo') {
       const t = star(P, Y0, ['U', 'W', 'V']); dot(t.a[0], t.a[1]); dot(t.b[0], t.b[1]); dot(t.c[0], t.c[1]);
@@ -304,7 +306,7 @@
       zNote += rc.z.src > 0 ? '、電源側 %Z = ' + fmt(rc.z.src, 3) + '%（変圧器容量基準）' : '、電源側は無限大母線';
       html += card('二次側 短絡電流' + sx,
         '<div class="kv">' + kvItem('合成 %Z', fmt(rc.z.total, 2), '%') + kvItem('短絡電流 Is', fmt(rc.iscKa, 2), 'kA') + '</div>' +
-        '<p class="sub-note">' + esc(zNote) + '</p>' + jisNote(rc, inp));
+        '<p class="sub-note">' + esc(zNote) + '</p>');
       t.push(tg + '二次短絡電流: ' + fmt(rc.iscKa, 2) + 'kA（%Z ' + fmt(rc.z.total, 2) + '%）');
     });
 
@@ -347,7 +349,7 @@
       pbb += '<h3 class="sub-h">三菱電機　<small>' + esc(cat.name) + '</small></h3>';
       if (cat.row) {
         const cr = cat.row;
-        pbb += '<p class="sub-note" style="margin-top:0">' + esc(cat.table) + '・' + cr.kva + 'kVA（定格一次電流 ' + cr.i1 + 'A）' + (cr.exact ? '' : '：表にない容量のため直近上位の行') + '</p><table class="res">';
+        pbb += '<p class="sub-note" style="margin-top:0">' + esc(cat.table) + '・' + cr.kva + 'kVA（定格一次電流 ' + cr.i1 + 'A）' + (cr.exact ? '' : '：表にない容量のため直近上位の行') + (cat.scott ? '。スコット専用の表は無いため三相表を準用（励磁突入電流は変圧器メーカーに確認）' : '') + '</p><table class="res">';
         const tx = [];
         cr.examples.forEach(function (ex, i) {
           const head = '励突例' + ['①', '②', '③'][i] + '<br>' + note(ex.peak ? '第1波 ' + ex.peak + '倍' : '');
@@ -367,7 +369,7 @@
       if (fc.col) {
         const c = fc.col;
         pbb += '<p class="sub-note" style="margin-top:0">' + esc(fc.table) + '・' + c.kva + 'kVA' + (c.exact ? '' : '：表にない容量のため直近上位の列') +
-          (pb.iscGiven ? '。一次側短絡電流 ' + fmt(pb.iscKa, 1) + 'kA の行を採用' : '。一次側短絡電流が未入力のため全行を表示') + '</p><table class="res">';
+          (pb.iscGiven ? '。一次側短絡電流 ' + fmt(pb.iscKa, 1) + 'kA の行を採用' : '。一次側短絡電流が未入力のため全行を表示') + (fc.scott ? '。スコット専用の表は無いため三相表を準用（励磁突入電流は変圧器メーカーに確認）' : '') + '</p><table class="res">';
         c.rows.forEach(function (x, j) {
           const hit = j === c.sel;
           const val = x.model ? (hit ? '<strong>' + esc(x.model) + '</strong> ← 採用' : esc(x.model)) + '<br>' + note(x.af + 'AF　' + x.rating + 'A') : note('記載なし');
@@ -491,6 +493,7 @@
       let brb = '<p class="sub-note" style="margin-top:0">条件: ' + br.voltClass + ' Icu ≥ ' +
         (rc.jis ? esc(rc.jis.name) + '（フレーム最大定格の列）' : fmt(rc.iscKa, 2) + 'kA') + (rc.input.mode === 'three' ? '' : '（2P）') +
         '。二次定格電流 ' + fmt(rc.i2, 1) + 'A を流せるフレームまで表示</p>';
+      brb += jisNote(rc, inp);
       Object.keys(br.makers).forEach(function (k) {
         const m = br.makers[k];
         brb += '<h3 class="sub-h">' + esc(m.name) + '　<small>' + esc(m.series) + '</small></h3><table class="res">';
