@@ -572,8 +572,9 @@ test('JIS C 4304/4306 結線（表19・表6）', () => {
   assert.deepStrictEqual(w(50, 210).codes, ['Yy0']);
   assert.deepStrictEqual(w(75, 210).codes, ['Yd1']);
   assert.deepStrictEqual(w(500, 210).codes, ['Yd1']);
-  assert.deepStrictEqual(w(750, 210).codes, ['Yd1', 'Dd0']);
-  assert.deepStrictEqual(w(1000, 210).codes, ['Yd1', 'Dd0']);
+  // 750・1000kVA は JIS 表19 で Y-Δ 又は Δ-Δ、日立標準（ST-156）の Δ-Δ を先頭
+  assert.deepStrictEqual(w(750, 210).codes, ['Dd0', 'Yd1']);
+  assert.deepStrictEqual(w(1000, 210).codes, ['Dd0', 'Yd1']);
   assert.deepStrictEqual(w(1500, 210).codes, ['Dd0']);
   assert.strictEqual(w(1500, 210).std, true);
   const n50 = w(2000, 420, 50);
@@ -581,11 +582,25 @@ test('JIS C 4304/4306 結線（表19・表6）', () => {
   assert.strictEqual(n50.std, true);
   assert.strictEqual(w(2000, 440, 50).std, false); // 440V は 60Hz
   assert.strictEqual(w(2000, 440, 60).std, true);
-  assert.strictEqual(w(500, 420, 50).std, false); // Δ-Y は 1500・2000kVA のみ
+  assert.strictEqual(w(500, 420, 50).std, false); // JIS の Δ-Y は 1500・2000kVA のみ
+  assert.strictEqual(w(500, 420, 50).jem, true); // 日立標準品（JEM 1520/1521）
+  assert.strictEqual(w(300, 210, 50, 3300).std, false); // JIS は 6kV 配電用
+  assert.deepStrictEqual(w(300, 210, 50, 3300).codes, ['Yd1']);
   assert.strictEqual(w(300, 220).std, false);
   assert.strictEqual(w(300, 210, 50, 420).lv, true); // 低圧/低圧は対象外
   assert.deepStrictEqual(w('single', 210).codes, ['単三']);
   assert.strictEqual(C.jisWinding('single', 750, 6600, 210, 50).std, false);
   assert.strictEqual(C.jisWinding('scott', 50, 6600, 210, 50), null);
   assert.deepStrictEqual(C.calculate({ phase: 3, kva: 30, v1: 6600, v2: 210 }).winding.codes, ['Yy0']);
+});
+
+test('タップ電圧と二次電圧（JIS 表4）', () => {
+  const big = C.tapTable(300, 210, 6600);
+  assert.deepStrictEqual(big.rows.map(r => r.label), ['F6750', 'R6600', 'F6450', 'F6300', '6150']);
+  near(big.rows[2].v2, 6600 * 210 / 6450, 1e-9); // 214.88V
+  near(big.rows[1].pct, 0, 1e-9);
+  assert.strictEqual(big.rows[4].kind, '低減容量タップ');
+  const small = C.tapTable(50, 210, 6600);
+  assert.deepStrictEqual(small.rows.map(r => r.label), ['R6600', 'F6300', '6000']);
+  near(C.tapTable(75, 210, 6750).rows[0].v2, 210, 1e-9); // 受電 6750V・タップ F6750 → 210V
 });

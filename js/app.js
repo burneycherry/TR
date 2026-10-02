@@ -30,7 +30,8 @@
   const el = {
     kva: $('kva'), v1: $('v1'), v2: $('v2'), v1m: $('v1m'), v2m: $('v2m'), z: $('z'), isc: $('isc'),
     kva1: $('kva1'), kva1Field: $('kva1Field'), todoLoad: $('todoLoad'),
-    kvaSel: $('kvaSel'), results: $('results'), err: $('inputErr'), toast: $('toast')
+    kvaSel: $('kvaSel'), results: $('results'), err: $('inputErr'), toast: $('toast'),
+    tap: $('tap'), tapSupply: $('tapSupply')
   };
   let lastText = '';
 
@@ -104,6 +105,23 @@
     buildVolt(el.kvaSel, el.kva, list, keep, labels);
   }
 
+  // タップ電圧（JIS 表4）：6kV 級の単相・三相・三相4線式・灯動（日立）で表示可
+  function tapEnabled(inp) {
+    const R = D.jisTr.v1Range;
+    const okMode = inp.mode === 'single' || inp.mode === 'three' || (inp.mode === 'todo' && inp.todoMaker === 'hitachi');
+    return okMode && inp.v1 >= R[0] && inp.v1 <= R[1] && inp.kva > 0;
+  }
+  function buildTaps(kva, keep) {
+    const T = D.jisTr.taps;
+    const list = kva > 0 && kva <= T.smallMaxKva ? T.small : T.large;
+    const cur = keep || Number(el.tap.value) || 6600;
+    const has = list.some(function (t) { return t[1] === cur; });
+    el.tap.innerHTML = list.map(function (t) {
+      const v = has ? cur : 6600;
+      return '<option value="' + t[1] + '"' + (t[1] === v ? ' selected' : '') + '>' + esc(t[0] + t[1]) + '</option>';
+    }).join('');
+  }
+
   function readInput() {
     const m = uiMode();
     return {
@@ -121,7 +139,10 @@
       v2: voltValue(el.v2, el.v2m),
       z: el.z.value === '' ? null : Number(el.z.value),
       iscKa: el.isc.value === '' ? null : Number(el.isc.value),
-      kva1: el.kva1.value === '' ? null : Number(el.kva1.value)
+      kva1: el.kva1.value === '' ? null : Number(el.kva1.value),
+      tapOn: radio('tapOn') === 'yes',
+      tap: Number(el.tap.value) || 6600,
+      tapSupply: el.tapSupply.value === '' ? null : Number(el.tapSupply.value)
     };
   }
 
@@ -289,7 +310,7 @@
         Dd0: 'Δ-Δ（Dd0：位相変位 0°）二次一端接地',
         Dyn11: 'Δ-Y（Dyn11：二次は一次より30°進み）中性点 N 接地'
       };
-      name = NAMES[code] + (wd.codes[1] ? '。JIS 表19 では ' + NAMES[wd.codes[1]].split('）')[0] + '）も可' : '');
+      name = (wd.codes[1] && wd.hitachi === code ? '日立標準 ' : '') + NAMES[code] + (wd.codes[1] ? '。JIS 表19 では ' + NAMES[wd.codes[1]].split('）')[0] + '）も可' : '');
     }
     tx(P, 14, '一次 ' + v1 + 'V');
     tx(S, 14, '二次');
@@ -297,7 +318,7 @@
     const wd = r.winding;
     let src;
     if (wd && !wd.lv) {
-      src = D.jisTr.name + ' 表18〜20 による' + (wd.std ? '' : '（JIS 標準外の条件を含むため参考）');
+      src = wd.jem ? 'JEM 1520/1521 準拠の標準品（' + D.jisTr.hitachi.name + '）、ベクトル図は JIS 表20' : D.jisTr.name + ' 表18〜20 による' + (wd.std ? '' : '（JIS 標準外の条件を含むため参考）');
     } else if (wd) {
       src = '低圧/低圧は JIS C 4304/4306 の対象外のため代表例';
     } else {
@@ -326,6 +347,28 @@
     // 結線図
     html += card('結線図', wiring(r, inp));
     if (r.winding && !r.winding.lv) { t.push('【結線】' + r.winding.codes.join(' 又は ') + '（' + D.jisTr.name + (r.winding.std ? '' : '・標準外を含む') + '）'); }
+
+    // タップ電圧（オン時のみ）：受電電圧に対する各タップの二次電圧
+    if (tapEnabled(inp) && inp.tapOn) {
+      const tt = C.tapTable(r.input.kva, r.input.v2, inp.tapSupply);
+      const sel = tt.rows.filter(function (x) { return x.tap === inp.tap; })[0] || tt.rows.filter(function (x) { return x.mark === 'R'; })[0];
+      const fmtV = function (v) {
+        if (inp.uiMode === 'three4w') { return fmt(v, 1) + '/' + fmt(v / Math.sqrt(3), 1) + 'V'; }
+        if (calcMode(inp.uiMode) !== 'three') { return fmt(v, 1) + '/' + fmt(v / 2, 1) + 'V'; }
+        return fmt(v, 1) + 'V';
+      };
+      let tb = '<p class="sub-note" style="margin-top:0">受電電圧 ' + tt.supply + 'V のときの二次電圧（無負荷）＝ 受電電圧 × ' + r.input.v2 + ' ÷ タップ電圧</p><table class="res">';
+      tt.rows.forEach(function (x) {
+        const on = x === sel;
+        tb += '<tr' + (on ? ' class="pick"' : '') + '><th>' + esc(x.label) + 'V<br><small>' + esc(x.kind) + '</small></th><td>' + (on ? '<strong>' : '') + esc(fmtV(x.v2)) + (on ? '</strong>' : '') +
+          ' <small>（' + (x.pct >= 0 ? '+' : '') + fmt(x.pct, 1) + '%）</small>' + (on ? ' ◀ 選択' : '') + '</td></tr>';
+      });
+      tb += '</table><p class="sub-note">タップを下げる（6450・6300V）と二次電圧が上がり、上げる（6750V）と下がります。' + (tt.small ? '1段（300V）で約 5%' : '1段（150V）で約 2.3%') + ' 変わります。R=定格電圧、F=全容量タップ（定格容量で使用可）、記号なし=低減容量タップ（定格容量より小さい容量になる。容量はメーカーに確認）。' +
+        (tt.small ? '50kVA 以下は R6600・F6300・6000 の3タップ（単相は指定により F6750〜6150 の5タップも可：JIS 表4 注記2）。' : '') +
+        '変圧器の電流・短絡電流などの選定計算は定格（R6600V）基準です。出典：' + esc(D.jisTr.name) + ' 表4。</p>';
+      html += card('タップ電圧と二次電圧', tb);
+      t.push('【タップ】' + sel.label + 'V（受電 ' + tt.supply + 'V → 二次 ' + fmtV(sel.v2) + '、' + (sel.pct >= 0 ? '+' : '') + fmt(sel.pct, 1) + '%）');
+    }
 
     // 定格電流
     if (r.todo) {
@@ -568,6 +611,13 @@
     el.kva1Field.hidden = !(inp.mode === 'three' && inp.v1 > 600);
     if (el.kva1Field.hidden) { inp.kva1 = null; }
     $('freqField').hidden = !todo;
+    const tapOk = tapEnabled(inp);
+    $('tapField').hidden = !tapOk;
+    buildTaps(inp.kva);
+    inp.tap = Number(el.tap.value) || 6600;
+    $('tapBox').hidden = !(tapOk && inp.tapOn);
+    el.tapSupply.placeholder = String(inp.v1 || 6600);
+    if (inp.tapSupply === null) { inp.tapSupply = inp.v1; }
     $('todoMakerField').hidden = !todo;
     $('kvaLabel').textContent = todo ? '定格容量 [kVA]（灯動共用）' : '容量 [kVA]';
     const tr = todo ? C.todoRow(inp.todoMaker, inp.kva) : null;
@@ -594,7 +644,7 @@
       uiMode: inp.uiMode, trType: inp.trType, mainBreaker: inp.mainBreaker, freq: inp.freq, iscBasis: inp.iscBasis, todoMaker: inp.todoMaker, todoSide: inp.todoSide, todoLoad: el.todoLoad.value, kva: el.kvaSel.value === MANUAL ? (el.kva.value || MANUAL) : el.kvaSel.value,
       v1: el.v1.value === MANUAL ? (el.v1m.value || MANUAL) : el.v1.value,
       v2: el.v2.value === MANUAL ? (el.v2m.value || MANUAL) : el.v2.value,
-      z: el.z.value, isc: el.isc.value, kva1: el.kva1.value
+      z: el.z.value, isc: el.isc.value, kva1: el.kva1.value, tapOn: inp.tapOn, tap: el.tap.value, tapSupply: el.tapSupply.value
     });
   }
 
@@ -638,6 +688,9 @@
       el.z.value = s.z || '';
       el.isc.value = s.isc || '';
       el.kva1.value = s.kva1 || '';
+      setRadio('tapOn', s.tapOn ? 'yes' : 'no');
+      el.tapSupply.value = s.tapSupply || '';
+      buildTaps(Number(s.kva) || 300, Number(s.tap) || 6600);
     }
     buildVolts(s ? s.v1 : null, s ? s.v2 : 210);
     buildKva(s && s.kva ? s.kva : 300);
@@ -662,10 +715,11 @@
         update();
       });
     });
-    Array.prototype.forEach.call(document.querySelectorAll('input[name="trType"], input[name="mainBrk"], input[name="freq"], input[name="todoSide"], input[name="iscBasis"]'), function (r) {
+    Array.prototype.forEach.call(document.querySelectorAll('input[name="trType"], input[name="mainBrk"], input[name="freq"], input[name="todoSide"], input[name="iscBasis"], input[name="tapOn"]'), function (r) {
       r.addEventListener('change', update);
     });
-    [el.kva, el.z, el.isc, el.kva1, el.v1m, el.v2m, el.todoLoad].forEach(function (i) { i.addEventListener('input', update); });
+    [el.kva, el.z, el.isc, el.kva1, el.v1m, el.v2m, el.todoLoad, el.tapSupply].forEach(function (i) { i.addEventListener('input', update); });
+    el.tap.addEventListener('change', update);
     [[el.kvaSel, el.kva], [el.v1, el.v1m], [el.v2, el.v2m]].forEach(function (p) {
       p[0].addEventListener('change', function () {
         p[1].hidden = p[0].value !== MANUAL;
@@ -681,6 +735,7 @@
     $('resetBtn').addEventListener('click', function () {
       try { localStorage.removeItem(STORE_KEY); } catch (e) { /* noop */ }
       setRadio('mode', 'three'); setRadio('trType', 'oil'); setRadio('mainBrk', 'no'); setRadio('freq', '50'); setRadio('iscBasis', 'jis'); setRadio('todoSide', 'three'); setRadio('todoMaker', 'hitachi'); el.todoLoad.value = '';
+      setRadio('tapOn', 'no'); el.tapSupply.value = ''; buildTaps(300, 6600);
       el.kva.value = ''; el.z.value = ''; el.isc.value = ''; el.kva1.value = '';
       el.v1m.value = ''; el.v2m.value = '';
       buildVolts(null, 210); buildKva(300); update();

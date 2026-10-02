@@ -125,6 +125,7 @@ table.res th, table.res td { padding: 7px 6px; border-bottom: 1px solid #e3e8ee;
 table.res th { font-size: 12px; color: #5b6878; font-weight: 400; white-space: nowrap; width: 30%; }
 table.res td strong { font-size: 16px; }
 table.res tr:last-child th, table.res tr:last-child td { border-bottom: none; }
+table.res tr.pick th, table.res tr.pick td { background: #eaf2fb; }
 
 .sub-note { font-size: 12px; color: #5b6878; margin: 8px 0 0; }
 .acb { display: inline-block; margin-top: 6px; font-size: 13px; }
@@ -196,6 +197,7 @@ table.res tr:last-child th, table.res tr:last-child td { border-bottom: none; }
   .wd { color: #8cbcf0; }
   .kv .v { color: #e4e9ef; }
   table.res th, table.res td { border-bottom-color: #2a3542; }
+  table.res tr.pick th, table.res tr.pick td { background: #1d3550; }
   .warn { background: #3a2a10; color: #f5c77e; }
   .kv .v .up { background: #3a2a10; color: #f5c77e; }
   .sub-h { color: #e4e9ef; }
