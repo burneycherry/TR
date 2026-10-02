@@ -23,13 +23,21 @@ test('%Z 入力時の短絡電流（無限大母線）', () => {
   assert.strictEqual(r.z.trIsDefault, false);
 });
 
-test('%Z 未入力は標準値を使用', () => {
+test('%Z 未入力は標準値を使用（日立 ST-156 特性表）', () => {
   const r = C.calculate({ phase: 3, kva: 300, v1: 6600, v2: 210 });
-  assert.strictEqual(r.z.tr, 2.9); // 富士トップランナー 300kVA
+  assert.strictEqual(r.z.tr, 4.63); // 油入 50Hz 三相210V 300kVA
   assert.strictEqual(r.z.trIsDefault, true);
-  assert.strictEqual(C.defaultZ('three', 2000, 210), 5.8);
-  assert.strictEqual(C.defaultZ('three', 2000, 420), 4.2);
-  assert.strictEqual(C.defaultZ('single', 75, 210), 1.8);
+  near(r.iscKa, 17.8, 0.05); // カタログの二次短絡電流 17.8kA と一致
+  assert.strictEqual(C.defaultZ('three', 2000, 210), 7.07);
+  assert.strictEqual(C.defaultZ('three', 2000, 420), 6.2);
+  assert.strictEqual(C.defaultZ('three', 2000, 440, 'oil', 60), 6.85);
+  assert.strictEqual(C.defaultZ('single', 75, 210), 2.61);
+  assert.strictEqual(C.defaultZ('single', 10, 210, 'mold', 50), 3.66);
+  assert.strictEqual(C.defaultZ('three', 300, 210, 'mold', 60), 7.54);
+  assert.strictEqual(C.defaultZ('three', 30, 420), 2.61); // 表の最小(75kVA)未満は最小容量の値
+  assert.strictEqual(C.defaultZ('single', 1000, 210), 5.31); // 表にない容量は直近下位
+  const m = C.calculate({ phase: 1, kva: 100, v1: 6600, v2: 210, trType: 'mold', freq: 60 });
+  assert.strictEqual(m.z.tr, 8.06);
 });
 
 test('電源側インピーダンスで短絡電流が減る', () => {
@@ -263,7 +271,7 @@ test('主幹ブレーカーは既定で不要、幹線は二次定格電流基�
 
 test('分岐ブレーカー：フレーム別、二次定格電流を流せるフレームまで', () => {
   // 三相100kVA 210V：274.9A・Is=274.9/2.8%≒9.8kA（計算値基準）
-  const r = C.calculate({ mode: 'three', kva: 100, v1: 6600, v2: 210, iscBasis: 'calc' });
+  const r = C.calculate({ mode: 'three', kva: 100, v1: 6600, v2: 210, z: 2.8, iscBasis: 'calc' });
   const mi = r.branch.makers.mitsubishi.rows.map((x) => x.af + 'AF:' + x.model);
   assert.deepStrictEqual(mi, ['63AF:NF63-SV', '125AF:NF125-CV', '225AF:NF250-CV', '400AF:NF400-CW']);
   const fj = r.branch.makers.fuji.rows.map((x) => x.af + 'AF:' + x.model);

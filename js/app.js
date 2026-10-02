@@ -391,7 +391,7 @@
       const rc = sc[0];
       const sx = sc[1];
       const tg = sc[2];
-      let zNote = '変圧器 %Z = ' + fmt(rc.z.tr, 2) + '%' + (rc.z.trIsDefault ? '（未入力のため標準値）' : '');
+      let zNote = '変圧器 %Z = ' + fmt(rc.z.tr, 2) + '%' + (rc.z.trIsDefault ? (inp.mode === 'todo' ? '（未入力のため灯動共用変圧器の標準値）' : '（未入力のため ' + D.defaultZ.name + ' の' + (rc.input.trType === 'mold' ? 'モールド' : '油入') + '・' + (inp.freq === 60 ? 60 : 50) + 'Hz の値）') : '');
       zNote += rc.z.src > 0 ? '、電源側 %Z = ' + fmt(rc.z.src, 3) + '%（変圧器容量基準）' : '、電源側は無限大母線';
       html += card('二次側 短絡電流' + sx,
         '<div class="kv">' + kvItem('合成 %Z', fmt(rc.z.total, 2), '%') + kvItem('短絡電流 Is', fmt(rc.iscKa, 2), 'kA') + '</div>' +
@@ -630,7 +630,7 @@
     } else {
       $('todoSplit').textContent = '';
     }
-    el.z.placeholder = '標準 ' + (tr ? (inp.freq === 60 ? tr.z60 : tr.z50) : C.defaultZ(todo ? 'three' : inp.mode, inp.kva || 0, inp.v2)) + '%';
+    el.z.placeholder = '標準 ' + (tr ? (inp.freq === 60 ? tr.z60 : tr.z50) : C.defaultZ(todo ? 'three' : inp.mode, inp.kva || 0, inp.v2, inp.trType, inp.freq)) + '%';
     try {
       const r = C.calculate(inp);
       el.err.textContent = '';

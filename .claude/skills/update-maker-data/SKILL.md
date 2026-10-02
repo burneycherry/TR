@@ -13,7 +13,7 @@ description: js/data.js の選定テーブル（LBSヒューズ・MCCB/ACB の�
 | テーブル | 形式 |
 |---|---|
 | `capacities.single/three/scott` | 標準容量 kVA（昇順） |
-| `defaultZ.single/three/three400` | `[kVA以上, %Z]` |
+| `defaultZ.<oil|mold>.<50|60>.<single|three|three400>` | `[kVA, %Z]`（日立 ST-156 特性表、表にない容量は直近下位） |
 | `lbs.makers.mitsubishi.single/three[3300|6600]` | `[kVA, [G,T]最小, [G,T]最大]`（`'※'`=CLS M400A、`null`=—） |
 | `lbs.makers.mitsubishi.combined` | `[Im 以下, [G,T]]`（表5(2)） |
 | `lbs.makers.fuji.oil/mold[3300|6600]` | `rows`(三相kVA, 0=なし) × `cols`(単相kVA, 0=なし) の `g` 行列 |

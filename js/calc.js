@@ -23,9 +23,11 @@
     return input.phase === 1 ? 'single' : 'three';
   }
 
-  function defaultZ(mode, kva, v2) {
+  // %Z 標準値：日立 ST-156 特性表（油入/モールド × 50/60Hz × 単相/三相210V/三相400V級）
+  function defaultZ(mode, kva, v2, trType, freq) {
     const single = mode === 'single' || mode === 1;
-    const t = D.defaultZ[single ? 'single' : (v2 > 300 ? 'three400' : 'three')];
+    const byType = D.defaultZ[trType === 'mold' ? 'mold' : 'oil'];
+    const t = byType[Number(freq) === 60 ? 60 : 50][single ? 'single' : (v2 > 300 ? 'three400' : 'three')];
     let z = t[0][1];
     for (let i = 0; i < t.length; i++) {
       if (kva >= t[i][0]) { z = t[i][1]; }
@@ -558,7 +560,7 @@
     const kva1 = mode === 'three' && Number(input.kva1) > 0 ? Number(input.kva1) : 0;
     const hv = v1 > LV_MAX;
     const zInput = Number(input.z);
-    const zTr = zInput > 0 ? zInput : defaultZ(mode, kva, v2);
+    const zTr = zInput > 0 ? zInput : defaultZ(mode, kva, v2, trType, input.freq);
     const iscIn = Number(input.iscKa) > 0 ? Number(input.iscKa) : 0;
     const zSrc = sourceZ(mode, kva, v1, iscIn);
     const zTotal = zTr + zSrc;
