@@ -8,14 +8,15 @@
   const MANUAL = 'manual';
 
   // 電源相モードごとの電圧候補
-  const HV1 = [6600, 3300, 22000];
+  // 代表的な電圧のみ（特高・まれな電圧は「手入力」）
+  const HV1 = [6600, 3300];
   const LV1 = [440, 420, 415, 400, 220, 210, 200];
   const V1ALL = HV1.concat(LV1);
-  const V1_OPTIONS = { three: V1ALL, three4w: V1ALL, single2w: V1ALL, single3w: V1ALL, scott: V1ALL, todo: V1ALL };
+  const V1_OPTIONS = { three: V1ALL, three4w: V1ALL, single2w: V1ALL, single3w: V1ALL, scott: V1ALL, todo: [6600] };
   const V2_OPTIONS = {
     three: [210, 200, 220, 400, 415, 420, 440],
     three4w: [415, 400, 420, 440],
-    single2w: [105, 100, 210, 200, 220, 440, 420],
+    single2w: [210, 105, 200, 100],
     single3w: [210, 200],
     scott: [210, 105, 200, 100],
     todo: [210]
@@ -28,7 +29,7 @@
   // 旧保存値：スコット高圧/低圧・低圧/低圧 → スコット、単相 → 単相3線（二次 105/100/440/420V は単相2線）
   function normUiMode(m, v2) {
     if (m && m.indexOf('scott') === 0) { return 'scott'; }
-    if (m === 'single') { return [105, 100, 440, 420].indexOf(Number(v2)) >= 0 ? 'single2w' : 'single3w'; }
+    if (m === 'single') { return [105, 100, 440, 420, 220].indexOf(Number(v2)) >= 0 ? 'single2w' : 'single3w'; }
     return V1_OPTIONS[m] ? m : 'three';
   }
 
@@ -688,7 +689,7 @@
       const eb = '<div class="kv">' + kvItem('EB 接地線', (e.label ? esc(e.label) : '個別検討') + upLine, '') +
         kvItem('一相分容量', fmt(e.phaseKva, 1), 'kVA') + '</div>' +
         '<p class="sub-note">表2.13.1（' + e.voltClass + '）：' + (e.sq !== null ? e.sq + 'mm²' : '範囲外') + '</p>' + up +
-        '<p class="sub-note">B種接地工事の接地線の太さ（' + e.voltClass + '・銅線）。一相分容量：三相=定格÷3、単相=定格、スコット=定格÷2、灯動共用=単相分＋三相分÷3、同容量V結線=単相1台分、異容量V結線=大きい方の単相変圧器。単相3線式は200V級を適用。<br>' + esc(D.eb.note) + '</p>';
+        '<p class="sub-note">B種接地工事の接地線の太さ（' + e.voltClass + '・銅線）。一相分容量：三相=定格÷3、単相=定格、スコット=定格÷2、灯動共用=単相分＋三相分÷3、同容量V結線=単相1台分、異容量V結線=大きい容量の単相変圧器（表2.13.1 備考(1)(ウ)）。単相3線式は200V級を適用。<br>' + esc(D.eb.note) + '</p>';
       html += card('EB（B種接地線）サイズ', eb, e.verified === false);
       t.push('EB: ' + (e.label || '個別検討') + (e.sizeUp.length ? '（ブレーカー ' + e.baseMax + 'A超は表2.13.2でサイズアップ：' + e.sizeUp.map(function (u) { return '〜' + u.to + 'A ' + u.label; }).join('、') + (e.maxByMain ? '・主幹' : '')  + '）' : ''));
     }
