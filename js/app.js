@@ -160,17 +160,25 @@
     return h;
   }
 
-  // JIS C 4620 解説表1 の行（キュービクルの遮断容量）
+  // キュービクルの遮断容量の表（JIS C 4620 解説表1 優先、無い範囲は認定の手引き 補足表1）
+  function tblLine(j) {
+    return j.ratings.map(function (x, i) { return x + 'A以下 ' + (j.values[i] === null ? '—' : fmt(j.values[i], 1) + 'kA'); }).join('／');
+  }
   function jisNote(rc, inp) {
     const j = rc.jis;
     if (!j) {
       return inp.iscBasis === 'jis' && (rc.input.mode === 'three' || rc.input.mode === 'single') ?
-        '<p class="sub-note">JIS C 4620 解説表1 の対象外（6.6kV/210V級・三相30〜750kVA・単相30〜500kVA 以外）のため計算値でブレーカーを選定</p>' : '';
+        '<p class="sub-note">JIS C 4620 解説表1・認定の手引き 補足表1 の対象外のため計算値でブレーカーを選定</p>' : '';
     }
-    const R = D.jisC4620.ratings;
-    let h = '<p class="sub-note"><strong>' + esc(D.jisC4620.name) + '（' + j.freq + 'Hz・' + j.kva + 'kVA' + (j.exact ? '' : '：直近上位の行') + '）でブレーカーを選定</strong><br>';
-    h += R.map(function (x, i) { return x + 'A以下 ' + (j.values[i] === null ? '—' : fmt(j.values[i], 1) + 'kA'); }).join('／');
-    return h + '<br>JIS C 4304 調査値（短絡電流の最大値）。630A 超は計算値。</p>';
+    const head = esc(j.name) + '（' + (j.src === 'jis' ? j.freq + 'Hz・' : j.circuit + '・') + j.kva + 'kVA' + (j.exact ? '' : '：直近上位の行') + '）';
+    let h = '<p class="sub-note"><strong>' + head + 'でブレーカーを選定</strong><br>' + tblLine(j) + '<br>' +
+      (j.src === 'jis' ? 'JIS C 4304 調査値（短絡電流の最大値）。' : 'JIS C 4620 解説表1 に無い範囲のため手引きで補完。') +
+      j.ratings[j.ratings.length - 1] + 'A 超は計算値。</p>';
+    if (rc.iscRef) {
+      const g = rc.iscRef;
+      h += '<p class="sub-note">参考：' + esc(g.name) + '（' + g.circuit + '・' + g.kva + 'kVA）<br>' + tblLine(g) + '</p>';
+    }
+    return h;
   }
 
   // 結線図（代表例）：三菱 油入変圧器カタログ L-10034-H（仕様 p.9・スコット p.27・ダブルパワー p.23）、日立 灯動共用 製品ページ
@@ -432,7 +440,7 @@
       const tg = sc[2];
       if (rc.breaker) {
         let bb = '<p class="sub-note" style="margin-top:0">条件: 定格 ≥ ' + fmt(rc.breaker.need, 1) + 'A、' + rc.breaker.voltClass + ' Icu ≥ ' +
-          (rc.jis ? 'JIS C 4620 解説表1 の定格列の値（630A超は ' + fmt(rc.iscKa, 2) + 'kA）' : fmt(rc.iscKa, 2) + 'kA') + (rc.input.mode === 'three' ? '' : '（2P）') + '</p><table class="res">';
+          (rc.jis ? esc(rc.jis.name) + ' の定格列の値（' + rc.jis.ratings[rc.jis.ratings.length - 1] + 'A超は ' + fmt(rc.iscKa, 2) + 'kA）' : fmt(rc.iscKa, 2) + 'kA') + (rc.input.mode === 'three' ? '' : '（2P）') + '</p><table class="res">';
         bb += breakerRows(rc.breaker, t, '主幹');
         bb += '</table>';
         html += card('二次側 主幹ブレーカー' + sx, bb, anyUnverified(rc.breaker.makers));
@@ -446,7 +454,7 @@
       const tg = sc[2];
       const br = rc.branch;
       let brb = '<p class="sub-note" style="margin-top:0">条件: ' + br.voltClass + ' Icu ≥ ' +
-        (rc.jis ? 'JIS C 4620 解説表1（フレーム最大定格の列）' : fmt(rc.iscKa, 2) + 'kA') + (rc.input.mode === 'three' ? '' : '（2P）') +
+        (rc.jis ? esc(rc.jis.name) + '（フレーム最大定格の列）' : fmt(rc.iscKa, 2) + 'kA') + (rc.input.mode === 'three' ? '' : '（2P）') +
         '。二次定格電流 ' + fmt(rc.i2, 1) + 'A を流せるフレームまで表示</p>';
       Object.keys(br.makers).forEach(function (k) {
         const m = br.makers[k];

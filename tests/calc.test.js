@@ -392,6 +392,34 @@ test('JIS C 4620 解説表1：キュービクルの遮断容量（既定で優�
   }));
 });
 
+test('認定の手引き 補足表1：JIS に無い範囲を補完', () => {
+  // 三相1000kVA 210V → JIS 表外 → 手引き 200V回路
+  const r = C.calculate({ mode: 'three', kva: 1000, v1: 6600, v2: 210, freq: 50 });
+  assert.strictEqual(r.jis.src, 'guide');
+  assert.deepStrictEqual(r.jis.values, [16.2, 33.4, 48.2, 52.7, 54.5]);
+  assert.strictEqual(C.jisAt(r.jis, 225).ka, 48.2);
+  assert.strictEqual(C.jisAt(r.jis, 630), null); // 600A超は計算値
+  // 三相500kVA 440V → 400V回路
+  const g = C.guideRow('three', 500, 6600, 440);
+  assert.deepStrictEqual(g.values, [17.5, 21.3, 22.6, 22.9, 23.0]);
+  assert.deepStrictEqual(C.guideRow('three', 2000, 6600, 440).values, [27.7, 43.5, 50.5, 52.0, 52.7]);
+  assert.strictEqual(C.guideRow('three', 50, 6600, 440).kva, 75); // 直近上位
+  assert.deepStrictEqual(C.guideRow('single', 300, 6600, 210).values, [13.1, 24.7, 33.2, 35.6, 36.7]);
+  assert.strictEqual(C.guideRow('single', 750, 6600, 210), null);
+  assert.strictEqual(C.guideRow('three', 100, 440, 210), null); // 低圧受電は対象外
+  // 両表がある範囲は JIS 優先、手引きは参考
+  const b = C.calculate({ mode: 'three', kva: 100, v1: 6600, v2: 210, freq: 50 });
+  assert.strictEqual(b.jis.src, 'jis');
+  assert.deepStrictEqual(b.iscRef.values, [8.5, 11.2, 12.5, 12.8, 13.0]);
+  // 三相4線 415V も 400V回路の表
+  assert.strictEqual(C.calculate({ mode: 'three4w', kva: 300, v1: 6600, v2: 415 }).jis.src, 'guide');
+  const G = C.data.guideIsc;
+  [G.v200.three, G.v200.single, G.v400.three].forEach((t) => {
+    assert.ok(t.every((x, i) => i === 0 || x[0] > t[i - 1][0]));
+    t.forEach((x) => assert.ok(x[1].every((y, i) => i === 0 || y >= x[1][i - 1])));
+  });
+});
+
 test('データ表は昇順', () => {
   const asc = (a) => a.every((v, i) => i === 0 || a[i - 1] < v);
   assert.ok(asc(C.data.ct.primaries));

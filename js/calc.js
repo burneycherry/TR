@@ -187,14 +187,30 @@
     if (!(v1 >= 6000 && v1 <= 7200) || !(v2 >= 200 && v2 <= 220)) { return null; }
     const t = J[mode][Number(freq) === 60 ? 60 : 50];
     for (let i = 0; i < t.length; i++) {
-      if (kva <= t[i][0]) { return { kva: t[i][0], exact: t[i][0] === kva, values: t[i][1], freq: Number(freq) === 60 ? 60 : 50 }; }
+      if (kva <= t[i][0]) {
+        return { src: 'jis', name: J.name, ratings: J.ratings, kva: t[i][0], exact: t[i][0] === kva, values: t[i][1], freq: Number(freq) === 60 ? 60 : 50 };
+      }
     }
     return null;
   }
 
-  // 定格 rating のブレーカーに対する表の値。630A 超は表外（null）。「—」は変圧器に対し過大な定格 → 行の最大値
+  // 認定の手引き 補足表1：高圧受電・200V回路（三相/単相）・400V回路（三相）。表にない容量は直近上位行
+  function guideRow(mode, kva, v1, v2) {
+    const G = D.guideIsc;
+    if (!(mode === 'three' || mode === 'single') || !(v1 > LV_MAX)) { return null; }
+    const set = v2 >= 200 && v2 <= 220 ? G.v200 : (v2 >= 380 && v2 <= 460 ? G.v400 : null);
+    const t = set && set[mode];
+    for (let i = 0; t && i < t.length; i++) {
+      if (kva <= t[i][0]) {
+        return { src: 'guide', name: G.name, ratings: G.ratings, kva: t[i][0], exact: t[i][0] === kva, values: t[i][1], circuit: set === G.v200 ? '200V回路' : '400V回路' };
+      }
+    }
+    return null;
+  }
+
+  // 定格 rating のブレーカーに対する表の値。表の最大列（630A/600A）超は表外（null）。「—」は変圧器に対し過大な定格 → 行の最大値
   function jisAt(row, rating) {
-    const R = D.jisC4620.ratings;
+    const R = row.ratings;
     for (let i = 0; i < R.length; i++) {
       if (rating <= R[i]) {
         let v = row.values[i];
@@ -440,7 +456,11 @@
     const ct = selectCT(i2);
     const thr = selectTHR(i2, ct.primary);
     // 遮断容量の基準：キュービクルは JIS C 4620 解説表1 を優先（適用できない条件は計算値）
-    const jis = input.iscBasis === 'calc' ? null : jisRow(mode, kva, v1, v2, input.freq);
+    // JIS C 4620 解説表1 を優先し、JIS に無い範囲は認定の手引き 補足表1 で補完（ユーザー指定）
+    const jisOnly = input.iscBasis === 'calc' ? null : jisRow(mode, kva, v1, v2, input.freq);
+    const guide = input.iscBasis === 'calc' ? null : guideRow(mode, kva, v1, v2);
+    const jis = jisOnly || guide;
+    const iscRef = jisOnly ? guide : null; // 両表がある範囲は手引きの値も参考表示
     const brk = input.mainBreaker ? selectBreaker(i2 * D.breaker.factor, iscKa, v2, jis) : null;
     const branch = selectBranch(i2, iscKa, v2, jis);
 
@@ -460,7 +480,7 @@
       input: { mode: mode, kva: kva, v1: v1, v2: v2, trType: trType, kva1: kva1 },
       hv: hv, circuits: circuits,
       z: { tr: zTr, trIsDefault: !(zInput > 0), src: zSrc, total: zTotal },
-      i1: i1, i2: i2, iscKa: iscKa, jis: jis,
+      i1: i1, i2: i2, iscKa: iscKa, jis: jis, iscRef: iscRef,
       fuse: fuse, primaryBreaker: primaryBreaker, ct: ct, thr: thr, breaker: brk, branch: branch,
       conductor: { design: design, byBreaker: !!brk, cable: selectCable(design, D.busCable.tables), busbar: selectBusbar(design) },
       eb: Object.assign(selectEB(mode, kva, v2, ebMax), { maxA: ebMax, maxByMain: !!brk, i2: i2 })
@@ -469,7 +489,7 @@
 
   const api = {
     calculate: calculate, ratedCurrent: ratedCurrent, defaultZ: defaultZ, sourceZ: sourceZ,
-    pickAtLeast: pickAtLeast, todoRow: todoRow, jisRow: jisRow, jisAt: jisAt, todoSplit: todoSplit, selectCable: selectCable, selectBusbar: selectBusbar,
+    pickAtLeast: pickAtLeast, todoRow: todoRow, jisRow: jisRow, guideRow: guideRow, jisAt: jisAt, todoSplit: todoSplit, selectCable: selectCable, selectBusbar: selectBusbar,
     selectBreaker: selectBreaker, selectBranch: selectBranch, selectCT: selectCT, selectTHR: selectTHR, selectFuse: selectFuse,
     selectEB: selectEB, data: D
   };
