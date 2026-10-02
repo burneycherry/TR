@@ -361,13 +361,27 @@
       } else {
         pbb += '<p class="sub-note">一次電圧 ' + r.input.v1 + 'V はカタログ表（210V・420V）の対象外です。個別に選定してください。</p>';
       }
-      // 富士：カタログ表は未転記のため 定格 ≥ I₁×1.25 の目安
-      const fj = { makers: { fuji: pb.makers.fuji }, voltClass: pb.voltClass, need: pb.need };
-      pbb += '<h3 class="sub-h">富士電機　<small>目安：定格 ≥ I₁×' + D.breaker.primaryFactor + ' = ' + fmt(pb.need, 1) + 'A' +
-        (pb.iscGiven ? '、' + pb.voltClass + ' Icu ≥ ' + fmt(pb.iscKa, 2) + 'kA' : '') + '</small></h3><table class="res">';
-      pbb += breakerRows(fj, t, '一次側ブレーカー');
-      pbb += '</table><p class="sub-note">富士は変圧器一次側用の選定表を未転記のため、励磁突入電流で不要動作しないよう瞬時引外し特性をカタログで確認してください。</p>';
-      if (!pb.iscGiven) { pbb += '<div class="warn">一次側短絡電流が未入力のため遮断容量は未検討です。「一次側短絡電流 [kA]」を入力してください。</div>'; }
+      // 富士：カタログ 4.11「変圧器一次側回路の選定」（一次側短絡電流 kA 行 × 容量列）
+      const fc = pb.fujiCatalog;
+      pbb += '<h3 class="sub-h">富士電機　<small>' + esc(fc.name) + '</small></h3>';
+      if (fc.col) {
+        const c = fc.col;
+        pbb += '<p class="sub-note" style="margin-top:0">' + esc(fc.table) + '・' + c.kva + 'kVA' + (c.exact ? '' : '：表にない容量のため直近上位の列') +
+          (pb.iscGiven ? '。一次側短絡電流 ' + fmt(pb.iscKa, 1) + 'kA の行を採用' : '。一次側短絡電流が未入力のため全行を表示') + '</p><table class="res">';
+        c.rows.forEach(function (x, j) {
+          const hit = j === c.sel;
+          const val = x.model ? (hit ? '<strong>' + esc(x.model) + '</strong> ← 採用' : esc(x.model)) + '<br>' + note(x.af + 'AF　' + x.rating + 'A') : note('記載なし');
+          if (!pb.iscGiven || hit || c.sel < 0) { pbb += row((hit ? '<strong>' : '') + x.ka + 'kA以下' + (hit ? '</strong>' : ''), val); }
+        });
+        pbb += '</table>';
+        if (c.over) { pbb += '<div class="warn">一次側短絡電流が表の最大（' + c.rows[c.rows.length - 1].ka + 'kA）を超えます。個別に選定してください。</div>'; }
+        const s1 = c.sel >= 0 ? c.rows[c.sel] : null;
+        t.push('一次側ブレーカー(富士 4.11 ' + fc.table + ' ' + c.kva + 'kVA): ' + (s1 ? s1.model + '（' + s1.ka + 'kA以下）' : '一次側短絡電流により選定'));
+        pbb += '<p class="sub-note">' + fc.notes.map(esc).join('<br>') + '</p>';
+      } else {
+        pbb += '<p class="sub-note">一次電圧 ' + r.input.v1 + 'V・容量はカタログ表（220V・440V、三相〜200kVA・単相〜100kVA）の対象外です。個別に選定してください。</p>';
+      }
+      if (!pb.iscGiven) { pbb += '<div class="warn">一次側短絡電流が未入力です。「一次側短絡電流 [kA]」を入力すると富士の該当行を選定し、遮断容量も確認できます。</div>'; }
       html += card('一次側 ブレーカー', pbb, anyUnverified(pb.makers));
     }
 

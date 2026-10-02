@@ -454,6 +454,35 @@ test('一次側ブレーカー：三菱 Y-0701 表4-25（変圧器一次側用�
   C.data.breaker.makers.mitsubishi.list.filter((b) => b.af === 63).forEach((b) => assert.ok(Math.max(...b.ratings) <= 50, b.model));
 });
 
+test('一次側ブレーカー：富士 62D2-J-0030f 4.11（一次側短絡電流 × 容量）', () => {
+  const F = (m, k, v, isc) => C.selectPrimaryFuji(m, k, v, isc).col;
+  const pick = (m, k, v, isc) => { const c = F(m, k, v, isc); return c.rows[c.sel].model; };
+  // 三相 200-220V/105V：50kVA・10kA → BW250EAT-3P150
+  assert.strictEqual(pick('three', 50, 210, 10), 'BW250EAT-3P150');
+  // 三相 400-440V/210V：1.5kA・0.5kVA → BW32AAG-3P003、10kVA → BW32SAT-3P020、200kVA → BW400EAT-3P350
+  assert.strictEqual(pick('three', 0.5, 440, 1.5), 'BW32AAG-3P003');
+  assert.strictEqual(pick('three', 10, 440, 1.5), 'BW32SAT-3P020');
+  assert.strictEqual(pick('three', 200, 440, 1.5), 'BW400EAT-3P350');
+  // 結合セル：三相440V 18kA は 0.5〜10kVA すべて BW125JAG-3P015
+  [0.5, 3, 10].forEach((k) => assert.strictEqual(pick('three', k, 440, 18), 'BW125JAG-3P015'));
+  // 単相 200-220V：2.5kA 1.5kVA と 2.0kVA は同じ BW32SAT-2P015、100kVA は BX800RAE-3P800
+  assert.strictEqual(pick('single', 1.5, 210, 2.5), 'BW32SAT-2P015');
+  assert.strictEqual(pick('single', 2, 210, 2.5), 'BW32SAT-2P015');
+  assert.strictEqual(pick('single', 100, 210, 2.5), 'BX800RAE-3P800');
+  // 単相 400-440V：10kA 10kVA → BW63RAG-2P060（形式から 63AF 60A）
+  const c = F('single', 10, 440, 10);
+  assert.deepStrictEqual([c.rows[c.sel].model, c.rows[c.sel].af, c.rows[c.sel].rating], ['BW63RAG-2P060', 63, 60]);
+  // 記載なし（－）と表の最大超過
+  assert.strictEqual(F('three', 200, 440, 65).rows[8].model, null);
+  assert.ok(F('three', 50, 210, 200).over);
+  // 短絡電流未入力は sel なし（全行表示）、直近上位列
+  assert.strictEqual(F('three', 40, 210, 0).sel, -1);
+  assert.strictEqual(F('three', 40, 210, 0).kva, 50);
+  assert.strictEqual(C.selectPrimaryFuji('three', 50, 100, 10).col, null);
+  // 表の形：各行の列数＝容量数
+  Object.values(C.data.fujiPrimary.tables).forEach((t) => t.rows.forEach((r) => assert.strictEqual(r[1].length, t.kva.length)));
+});
+
 test('データ表は昇順', () => {
   const asc = (a) => a.every((v, i) => i === 0 || a[i - 1] < v);
   assert.ok(asc(C.data.ct.primaries));

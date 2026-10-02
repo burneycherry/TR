@@ -371,6 +371,31 @@
     return res;
   }
 
+  // 変圧器一次側回路の選定（富士 62D2-J-0030f 4.11）：一次側短絡電流 kA 行 × 容量列
+  // 一次 380〜460V → 440V 表、200〜220V → 220V 表。表にない容量は直近上位列。短絡電流が未入力なら全行を示す
+  function selectPrimaryFuji(mode, kva, v1, iscKa) {
+    const F = D.fujiPrimary;
+    const ph = mode === 'single' ? 'single' : 'three';
+    const vk = v1 >= 380 && v1 <= 460 ? 440 : (v1 >= 200 && v1 <= 220 ? 220 : 0);
+    const res = { name: F.name, notes: F.notes, table: vk ? (ph === 'single' ? '単相' : '三相') + vk + 'V' : null, col: null };
+    if (!vk) { return res; }
+    const t = F.tables[ph + vk];
+    let ci = -1;
+    for (let i = 0; i < t.kva.length; i++) { if (kva <= t.kva[i]) { ci = i; break; } }
+    if (ci < 0) { return res; }
+    const rows = t.rows.map(function (r) {
+      const m = r[1][ci];
+      const mm = m ? /^B[WX](\d+)\w*-(\d)P(\d+)$/.exec(m) : null;
+      return { ka: r[0], model: m, af: mm ? Number(mm[1]) : null, rating: mm ? Number(mm[3]) : null };
+    });
+    let sel = -1;
+    if (iscKa > 0) {
+      for (let j = 0; j < rows.length; j++) { if (rows[j].ka >= iscKa) { sel = j; break; } }
+    }
+    res.col = { kva: t.kva[ci], exact: t.kva[ci] === kva, rows: rows, sel: sel, over: iscKa > rows[rows.length - 1].ka };
+    return res;
+  }
+
   // 灯動共用変圧器：メーカー・定格容量の行を返す
   function todoRow(maker, kva) {
     const M = D.todo.makers[todoMaker(maker)];
@@ -485,6 +510,7 @@
     if (!hv) {
       primaryBreaker = selectBreaker(i1 * D.breaker.primaryFactor, iscIn, v1);
       primaryBreaker.catalog = selectPrimaryMitsubishi(mode, kva, v1);
+      primaryBreaker.fujiCatalog = selectPrimaryFuji(mode, kva, v1, iscIn);
       primaryBreaker.iscGiven = iscIn > 0;
     }
     const ct = selectCT(i2);
@@ -523,7 +549,7 @@
 
   const api = {
     calculate: calculate, ratedCurrent: ratedCurrent, defaultZ: defaultZ, sourceZ: sourceZ,
-    pickAtLeast: pickAtLeast, todoRow: todoRow, selectPrimaryMitsubishi: selectPrimaryMitsubishi, jisRow: jisRow, guideRow: guideRow, jisAt: jisAt, todoSplit: todoSplit, selectCable: selectCable, selectBusbar: selectBusbar,
+    pickAtLeast: pickAtLeast, todoRow: todoRow, selectPrimaryMitsubishi: selectPrimaryMitsubishi, selectPrimaryFuji: selectPrimaryFuji, jisRow: jisRow, guideRow: guideRow, jisAt: jisAt, todoSplit: todoSplit, selectCable: selectCable, selectBusbar: selectBusbar,
     selectBreaker: selectBreaker, selectBranch: selectBranch, selectCT: selectCT, selectTHR: selectTHR, selectFuse: selectFuse,
     selectEB: selectEB, data: D
   };
