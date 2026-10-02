@@ -193,6 +193,12 @@
       tx(x + 13, 157, 'B種接地', 'start');
     }
     function tri(cx, cy) { return { a: [cx, cy - R], b: [cx - R * 0.866, cy + R / 2], c: [cx + R * 0.866, cy + R / 2] }; }
+    // ベクトル図：角度 deg（反時計回り、0°=右）の点。U=90°・V=-30°・W=210° を基準に、二次は位相変位ぶん回転
+    function pol(cx, cy, deg, r) { const a = deg * Math.PI / 180; return [cx + (r || R) * Math.cos(a), cy - (r || R) * Math.sin(a)]; }
+    function lbl(q, cx, cy, t) {
+      const dx = q[0] - cx, dy = q[1] - cy, d = Math.sqrt(dx * dx + dy * dy) || 1;
+      tx(q[0] + dx / d * 11, q[1] + dy / d * 11 + 4, t);
+    }
     function star(cx, cy, n) {
       const t = tri(cx, cy);
       ln(cx, cy, t.a[0], t.a[1]); ln(cx, cy, t.b[0], t.b[1]); ln(cx, cy, t.c[0], t.c[1]);
@@ -229,13 +235,17 @@
       tx(xv - 6, yt + 4, 'v2', 'end'); tx(xv - 6, (yt + yu) / 2 + 4, '02', 'end'); tx(xv - 6, yu + 4, 'u2', 'end');
       const xh0 = xv + 12, xh1 = xv + 76, yh = yu + 8;
       ln(xh0, yh, xh1, yh); dot(xh0, yh); dot((xh0 + xh1) / 2, yh); dot(xh1, yh);
-      tx(xh0, yh + 14, 'v1'); tx((xh0 + xh1) / 2, yh + 14, '01'); tx(xh1, yh + 14, 'u1');
+      tx(xh0, yh + 14, 'v1'); tx((xh0 + xh1) / 2 + 5, yh + 14, '01', 'start'); tx(xh1, yh + 14, 'u1');
       ln(xh0, yu - 6, xh0 + 6, yu - 6); ln(xh0 + 6, yu - 6, xh0 + 6, yu); // 直角記号
-      name = 'スコット結線（一次 T結線、二次 2回路は90°位相差。各座 単相3線、接地は u2・v2 または中点 01・02：カタログ・仕様書で確認）';
+      // EB（B種接地）は各座の中点 01・02 から（ユーザー指定）
+      const xg = xh1 + 22, y02 = (yt + yu) / 2, xm = (xh0 + xh1) / 2;
+      ln(xv, y02, xg, y02); ln(xm, yh, xm, yh + 22); ln(xm, yh + 22, xg, yh + 22); ln(xg, y02, xg, yh + 22); gnd(xg, yh + 22);
+      name = 'スコット結線（一次 T結線、二次 M座・T座は90°位相差、各座 単相3線。B種接地は中点 01・02 から）';
       outs = ['単相3線×2', v2 + '/' + (v2 / 2) + 'V'];
     } else if (m === 'todo') {
       const t = star(P, Y0, ['U', 'W', 'V']); dot(t.a[0], t.a[1]); dot(t.b[0], t.b[1]); dot(t.c[0], t.c[1]);
-      const u = [S + 16, Y0 - R], v = [S + 16, Y0 + R], w = [S - 30, Y0], o = [S + 16, Y0];
+      // Yd1：二次は30°遅れ → u 60°・v -60°・w 180°（日立・三菱の結線図と同じ向き）
+      const u = pol(S, Y0, 60), v = pol(S, Y0, -60), w = pol(S, Y0, 180), o = [(u[0] + v[0]) / 2, Y0];
       ln(w[0], w[1], u[0], u[1]); ln(u[0], u[1], v[0], v[1]); ln(v[0], v[1], w[0], w[1]);
       [u, v, w, o].forEach(function (q) { dot(q[0], q[1]); });
       tx(u[0] + 8, u[1] + 4, 'u', 'start'); tx(v[0] + 8, v[1] + 4, 'v', 'start'); tx(w[0] - 7, w[1] + 4, 'w', 'end'); tx(o[0] - 5, o[1] - 4, 'o', 'end');
@@ -243,17 +253,22 @@
       name = 'Y-Δ 灯動共用（二次Δの一相中点 o を引出し・o 接地）';
       outs = ['三相 u-v-w', v2 + 'V', '単相 u-o-v', v2 + '-' + (v2 / 2) + 'V'];
     } else if (v2 > 300) {
+      // Dyn11：一次 Δ（U 90°・V -30°・W 210°）、二次 Y は30°進み → u 120°・v 0°・w 240°
       const t = delta(P, Y0, ['U', 'W', 'V']); dot(t.a[0], t.a[1]); dot(t.b[0], t.b[1]); dot(t.c[0], t.c[1]);
-      const t2 = star(S, Y0, ['u', 'w', 'v']); dot(t2.a[0], t2.a[1]); dot(t2.b[0], t2.b[1]); dot(t2.c[0], t2.c[1]); dot(S, Y0);
-      tx(S + 8, Y0 - 2, 'N', 'start');
+      const pu = pol(S, Y0, 120), pv = pol(S, Y0, 0), pw = pol(S, Y0, 240);
+      [[pu, 'u'], [pv, 'v'], [pw, 'w']].forEach(function (q) { ln(S, Y0, q[0][0], q[0][1]); dot(q[0][0], q[0][1]); lbl(q[0], S, Y0, q[1]); });
+      dot(S, Y0); tx(S + 7, Y0 - 6, 'N', 'start');
       ln(S, Y0, S, Y0 + R + 10); ln(S, Y0 + R + 10, S + 30, Y0 + R + 10); gnd(S + 30, Y0 + R + 10);
-      name = 'Δ-Y（Dyn11）中性点 N 接地';
+      name = 'Δ-Y（Dyn11：二次は一次に対し30°進み）中性点 N 接地';
       outs = inp.uiMode === 'three4w' ? ['三相4線', v2 + '/' + Math.round(v2 / Math.sqrt(3)) + 'V'] : ['三相 ' + v2 + 'V'];
     } else {
+      // Yd1：一次 Y（U 90°・V -30°・W 210°）、二次 Δ は30°遅れ → u 60°・v -60°・w 180°
       const t = star(P, Y0, ['U', 'W', 'V']); dot(t.a[0], t.a[1]); dot(t.b[0], t.b[1]); dot(t.c[0], t.c[1]);
-      const t2 = delta(S, Y0, ['u', 'w', 'v']); dot(t2.a[0], t2.a[1]); dot(t2.b[0], t2.b[1]); dot(t2.c[0], t2.c[1]);
-      ln(t2.c[0], t2.c[1], t2.c[0] + 24, t2.c[1]); gnd(t2.c[0] + 24, t2.c[1]);
-      name = 'Y-Δ（Yd1）二次一端接地 ※Δ-Δ（Dd0）の機種もあり';
+      const pu = pol(S, Y0, 60), pv = pol(S, Y0, -60), pw = pol(S, Y0, 180);
+      ln(pu[0], pu[1], pv[0], pv[1]); ln(pv[0], pv[1], pw[0], pw[1]); ln(pw[0], pw[1], pu[0], pu[1]);
+      [[pu, 'u'], [pv, 'v'], [pw, 'w']].forEach(function (q) { dot(q[0][0], q[0][1]); lbl(q[0], S, Y0, q[1]); });
+      ln(pv[0], pv[1], pv[0] + 24, pv[1]); gnd(pv[0] + 24, pv[1]);
+      name = 'Y-Δ（Yd1：二次は一次に対し30°遅れ）二次一端接地 ※Δ-Δ（Dd0）の機種もあり';
       outs = ['三相3線 ' + v2 + 'V'];
     }
     tx(P, 14, '一次 ' + v1 + 'V');

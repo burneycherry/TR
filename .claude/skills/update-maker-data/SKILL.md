@@ -7,6 +7,7 @@ description: js/data.js の選定テーブル（LBSヒューズ・MCCB/ACB の�
 
 1. 出典（カタログ名・版数・ページ）を確認する。推測値で上書きしない。
    - PDF が `pdftotext` で読めない日本語表は `pip install pymupdf` → `page.get_pixmap(dpi=150, clip=...)` で画像化して目視。
+   - 表は `page.find_tables()` で抽出し、別列（一次電流など）で行を照合。結合セルは罫線（`get_drawings()`）から範囲を復元。グラフはベクトル座標を目盛線で校正して読む。
 2. `js/data.js` の該当テーブルを編集する。
 
 | テーブル | 形式 |
