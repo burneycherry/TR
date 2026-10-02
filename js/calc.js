@@ -338,6 +338,39 @@
    */
   function todoMaker(maker) { return D.todo.makers[maker] ? maker : 'hitachi'; }
 
+  // 63AF は 50A まで（ユーザー指定）：NF63 系で 50A 超の項目は除外
+  const NF63_MAX = 50;
+  function dropNf63(items) {
+    const out = [];
+    items.forEach(function (it) {
+      let models = it[0].split(',').map(function (x) { return x.trim(); });
+      if (it[1] > NF63_MAX) { models = models.filter(function (m) { return m.indexOf('NF63-') !== 0; }); }
+      if (models.length) { out.push([models.join(', '), it[1]]); }
+    });
+    return out;
+  }
+
+  // 変圧器一次側用遮断器（三菱 Y-0701 表4-25）：低圧/低圧変圧器の一次側
+  // 一次 200〜220V → 210V 表、380〜460V → 420V 表。スコット・灯動は三相表。表にない容量は直近上位行
+  function selectPrimaryMitsubishi(mode, kva, v1) {
+    const T = D.primaryBrk.tables;
+    const ph = mode === 'single' ? 'single' : 'three';
+    const vk = v1 >= 200 && v1 <= 220 ? 210 : (v1 >= 380 && v1 <= 460 ? 420 : 0);
+    const res = { name: D.primaryBrk.name, notes: D.primaryBrk.notes, table: vk ? (ph === 'single' ? '単相' : '三相') + vk + 'V' : null, row: null };
+    if (!vk) { return res; }
+    const rows = T[ph + vk];
+    for (let i = 0; i < rows.length; i++) {
+      if (kva <= rows[i][0]) {
+        res.row = {
+          kva: rows[i][0], exact: rows[i][0] === kva, i1: rows[i][1],
+          examples: rows[i][2].map(function (e) { return { peak: e[0], items: dropNf63(e[1]) }; })
+        };
+        break;
+      }
+    }
+    return res;
+  }
+
   // 灯動共用変圧器：メーカー・定格容量の行を返す
   function todoRow(maker, kva) {
     const M = D.todo.makers[todoMaker(maker)];
@@ -451,6 +484,7 @@
     let primaryBreaker = null;
     if (!hv) {
       primaryBreaker = selectBreaker(i1 * D.breaker.primaryFactor, iscIn, v1);
+      primaryBreaker.catalog = selectPrimaryMitsubishi(mode, kva, v1);
       primaryBreaker.iscGiven = iscIn > 0;
     }
     const ct = selectCT(i2);
@@ -489,7 +523,7 @@
 
   const api = {
     calculate: calculate, ratedCurrent: ratedCurrent, defaultZ: defaultZ, sourceZ: sourceZ,
-    pickAtLeast: pickAtLeast, todoRow: todoRow, jisRow: jisRow, guideRow: guideRow, jisAt: jisAt, todoSplit: todoSplit, selectCable: selectCable, selectBusbar: selectBusbar,
+    pickAtLeast: pickAtLeast, todoRow: todoRow, selectPrimaryMitsubishi: selectPrimaryMitsubishi, jisRow: jisRow, guideRow: guideRow, jisAt: jisAt, todoSplit: todoSplit, selectCable: selectCable, selectBusbar: selectBusbar,
     selectBreaker: selectBreaker, selectBranch: selectBranch, selectCT: selectCT, selectTHR: selectTHR, selectFuse: selectFuse,
     selectEB: selectEB, data: D
   };

@@ -28,6 +28,7 @@ description: js/data.js の選定テーブル（LBSヒューズ・MCCB/ACB の�
 | `todo.makers.<maker>.curves[kVA]` / `knees[kVA]` | 負荷配分曲線の折れ点 `[三相kVA, 単相kVA]`（三相0→定格の順）／未入力時の配分。PDF はベクトル座標（`page.get_drawings()`）から読む |
 | `jisC4620.three/single[50|60]` | `[変圧器kVA, [60A,125A,250A,400A,630A 以下の kA]]`（null＝—、JIS C 4620 解説表1） |
 | `guideIsc.v200.three/single`・`v400.three` | `[変圧器kVA, [50,100,225,400,600A 以下の kA]]`（認定の手引き 補足表1） |
+| `primaryBrk.tables.single210/single420/three210/three420` | `[kVA, 一次電流A, [[第1波倍数|null, [[形名, 定格A], ...]] ×3]]`（三菱 Y-0701 表4-25。`page.find_tables()` で抽出） |
 | `busbar.table` | `[表示名, 許容A]`（許容電流の昇順） |
 
 3. 確認済みテーブルは `verified: true`、`version` を当日の日付（同日複数回は末尾に英字）に。

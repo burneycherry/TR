@@ -420,6 +420,40 @@ test('認定の手引き 補足表1：JIS に無い範囲を補完', () => {
   });
 });
 
+test('一次側ブレーカー：三菱 Y-0701 表4-25（変圧器一次側用遮断器の選定）', () => {
+  const S = (m, k, v) => C.selectPrimaryMitsubishi(m, k, v).row;
+  const items = (ex) => ex.items.map((x) => x[0] + ' ' + x[1]);
+  // 三相210V 50kVA（137A）
+  const r = S('three', 50, 210);
+  assert.strictEqual(r.i1, 137);
+  assert.deepStrictEqual(r.examples.map((e) => e.peak), [20, 23, 16]);
+  assert.deepStrictEqual(items(r.examples[0]), ['NF250-SEV, NF250-HEV 175', 'NF400-CW 350', 'NF400-SW 250']);
+  // 単相210V 5kVA 例①
+  assert.deepStrictEqual(items(S('single', 5, 210).examples[0]), ['NF125-CV（注1） 60', 'NF125-CV, NF125-SV, NF125-HV 100', 'NF125-SEV, NF125-HEV 50']);
+  // 三相420V 300kVA 例①
+  assert.deepStrictEqual(items(S('three', 300, 440).examples[0]), ['NF630-CW 600', 'NF630-SW 500', 'NF630-SEW, NF630-HEW 500']);
+  // 単相420V 500kVA は ②のみ倍数あり・形名なし
+  assert.strictEqual(S('single', 500, 420).examples[0].items.length, 0);
+  // 三相210V 500kVA 例① は —
+  assert.strictEqual(S('three', 500, 210).examples[0].peak, null);
+  // 63AF は 50A まで：三相210V 15kVA 例③ の NF63-CV, NF63-SV 63A は除外
+  assert.deepStrictEqual(items(S('three', 15, 210).examples[2]), ['NF63-CV（注1） 50', 'NF125-CV, NF125-SV 75']);
+  // 表にない容量は直近上位、対象外電圧は row なし
+  assert.strictEqual(S('three', 40, 210).kva, 50);
+  assert.strictEqual(C.selectPrimaryMitsubishi('three', 50, 100).row, null);
+  // スコット（一次三相210V）
+  assert.strictEqual(C.calculate({ mode: 'scott', kva: 50, v1: 210, v2: 210 }).primaryBreaker.catalog.row.i1, 137);
+  // 全表：一次電流＝kVA から計算した値
+  const T = C.data.primaryBrk.tables;
+  Object.keys(T).forEach((k) => T[k].forEach((row) => {
+    const v = k.endsWith('210') ? 210 : 420;
+    const i1 = k.startsWith('single') ? row[0] * 1000 / v : row[0] * 1000 / (Math.sqrt(3) * v);
+    assert.ok(Math.abs(row[1] - i1) / i1 < 0.01, k + ' ' + row[0]);
+  }));
+  // NF63-CV/SV/HV の定格は 50A まで
+  C.data.breaker.makers.mitsubishi.list.filter((b) => b.af === 63).forEach((b) => assert.ok(Math.max(...b.ratings) <= 50, b.model));
+});
+
 test('データ表は昇順', () => {
   const asc = (a) => a.every((v, i) => i === 0 || a[i - 1] < v);
   assert.ok(asc(C.data.ct.primaries));

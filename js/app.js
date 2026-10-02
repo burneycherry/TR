@@ -341,12 +341,33 @@
     }
     if (r.primaryBreaker) {
       const pb = r.primaryBreaker;
-      let pbb = '<p class="sub-note" style="margin-top:0">条件: 定格 ≥ I₁×' + D.breaker.primaryFactor + ' = ' + fmt(pb.need, 1) + 'A' +
-        (pb.iscGiven ? '、' + pb.voltClass + ' Icu ≥ ' + fmt(pb.iscKa, 2) + 'kA' : '') + '</p><table class="res">';
-      pbb += breakerRows(pb, t, '一次側ブレーカー');
-      pbb += '</table>';
+      const cat = pb.catalog;
+      let pbb = '';
+      // 三菱：カタログ「変圧器一次側用遮断器の選定」表4-25（励磁突入電流例①〜③）
+      pbb += '<h3 class="sub-h">三菱電機　<small>' + esc(cat.name) + '</small></h3>';
+      if (cat.row) {
+        const cr = cat.row;
+        pbb += '<p class="sub-note" style="margin-top:0">' + esc(cat.table) + '・' + cr.kva + 'kVA（定格一次電流 ' + cr.i1 + 'A）' + (cr.exact ? '' : '：表にない容量のため直近上位の行') + '</p><table class="res">';
+        const tx = [];
+        cr.examples.forEach(function (ex, i) {
+          const head = '励突例' + ['①', '②', '③'][i] + '<br>' + note(ex.peak ? '第1波 ' + ex.peak + '倍' : '');
+          const body = ex.items.length ? ex.items.map(function (it) { return '<strong>' + esc(it[0]) + '</strong> ' + it[1] + 'A'; }).join('<br>') : '<strong>該当なし</strong><br>' + note('個別選定');
+          pbb += row(head, body);
+          tx.push(['①', '②', '③'][i] + (ex.items.length ? ex.items.map(function (it) { return it[0] + ' ' + it[1] + 'A'; }).join(' / ') : '該当なし'));
+        });
+        pbb += '</table>';
+        t.push('一次側ブレーカー(三菱 表4-25 ' + cat.table + ' ' + cr.kva + 'kVA): ' + tx.join('　'));
+        pbb += '<p class="sub-note">' + cat.notes.map(esc).join('<br>') + '<br>三菱 63AF は 50A まで（60・63A は除外）。</p>';
+      } else {
+        pbb += '<p class="sub-note">一次電圧 ' + r.input.v1 + 'V はカタログ表（210V・420V）の対象外です。個別に選定してください。</p>';
+      }
+      // 富士：カタログ表は未転記のため 定格 ≥ I₁×1.25 の目安
+      const fj = { makers: { fuji: pb.makers.fuji }, voltClass: pb.voltClass, need: pb.need };
+      pbb += '<h3 class="sub-h">富士電機　<small>目安：定格 ≥ I₁×' + D.breaker.primaryFactor + ' = ' + fmt(pb.need, 1) + 'A' +
+        (pb.iscGiven ? '、' + pb.voltClass + ' Icu ≥ ' + fmt(pb.iscKa, 2) + 'kA' : '') + '</small></h3><table class="res">';
+      pbb += breakerRows(fj, t, '一次側ブレーカー');
+      pbb += '</table><p class="sub-note">富士は変圧器一次側用の選定表を未転記のため、励磁突入電流で不要動作しないよう瞬時引外し特性をカタログで確認してください。</p>';
       if (!pb.iscGiven) { pbb += '<div class="warn">一次側短絡電流が未入力のため遮断容量は未検討です。「一次側短絡電流 [kA]」を入力してください。</div>'; }
-      pbb += '<p class="sub-note">低圧/低圧変圧器の一次側は励磁突入電流で不要動作しないよう、瞬時引外し特性（変圧器一次保護用など）をカタログで確認してください。</p>';
       html += card('一次側 ブレーカー', pbb, anyUnverified(pb.makers));
     }
 
