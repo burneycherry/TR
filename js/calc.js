@@ -477,6 +477,7 @@
     if (base.fuse) { base.fuse.warn.push('灯動共用変圧器：一次側は定格容量 ' + k + 'kVA の三相変圧器として選定しています。'); }
     return Object.assign(base, {
       input: Object.assign({}, base.input, { mode: 'todo', kva3: split.three, kva1: split.single, freq: freq }),
+      winding: null, // 灯動共用は JIS C 4304/4306 の対象外（結線図はメーカーの代表例）
       todo: {
         three: c3, single: c1, row: row, freq: freq, split: split, maker: maker, name: M.name, source: M.source,
         warn: split.overSingle ? ['単相負荷として無条件に使用できるのは ' + split.overSingle + 'kVA 以下です。超える場合は設備全体の不平衡率を30%以下としてください（内線規程 1305節、' + M.name + '）。'] : []
@@ -488,45 +489,74 @@
   // JIS C 4304/4306 の結線（表18〜20）：単相=単三、三相は容量と二次電圧で Yy0/Yd1/Dd0/Dyn11
   // JIS の対象は 6kV 配電用（v1Range）。それ以外の高圧は同じ結線を参考表示、低圧/低圧は代表例（二次 300V 以下 Yd1、超 Dyn11）
   // 表19 で2通りある容量（750・1000kVA）は日立標準（ST-156）の結線を先頭にする
-  function jisWinding(mode, kva, v1, v2, freq) {
+  // opts.wires：単相 2|3（既定 3）、opts.conn：三相3線で選択した結線（空＝代表例）。JIS 外の選択は注意を付ける
+  const CONN_NAMES = { Yy0: 'Y-Y（Yy0）', Yd1: 'Y-Δ（Yd1）', Dd0: 'Δ-Δ（Dd0）', Dyn11: 'Δ-Y（Dyn11）' };
+  function jisWinding(mode, kva, v1, v2, freq, opts) {
+    const o = opts || {};
     const J = D.jisTr;
     const H = J.hitachi;
     const f = Number(freq) === 60 ? 60 : 50;
     const notes = [];
     if (mode !== 'single' && mode !== 'three') { return null; }
-    if (!(v1 > LV_MAX)) { return { codes: [mode === 'single' ? '単三' : (v2 > 300 ? 'Dyn11' : 'Yd1')], std: false, lv: true, notes: [] }; }
+    const lv = !(v1 > LV_MAX);
     const v1Ok = v1 >= J.v1Range[0] && v1 <= J.v1Range[1];
-    if (!v1Ok) { notes.push('JIS C 4304/4306 は 6kV 配電用です（一次 ' + v1 + 'V は対象外、結線は参考）。'); }
     if (mode === 'single') {
+      const w2 = o.wires === 2;
+      if (lv) { return { codes: [w2 ? '単相2線' : '単三'], std: false, lv: true, notes: [] }; }
+      if (!v1Ok) { notes.push('JIS C 4304/4306 は 6kV 配電用です（一次 ' + v1 + 'V は対象外、結線は参考）。'); }
       const capOk = J.capacities.single.indexOf(kva) >= 0;
       if (!capOk) { notes.push('容量 ' + kva + 'kVA は JIS 表3 の定格容量外です。'); }
-      if (v2 !== 210) { notes.push('JIS 表5 の単相定格二次電圧は 210-105V です。'); }
-      return { codes: ['単三'], std: v1Ok && capOk && v2 === 210, lv: false, notes: notes };
+      if (w2) { notes.push('JIS 表18 の単相結線は単三専用結線（210-105V）です。単相2線は JIS 標準外です。'); } else if (v2 !== 210) { notes.push('JIS 表5 の単相定格二次電圧は 210-105V です。'); }
+      return { codes: [w2 ? '単相2線' : '単三'], std: v1Ok && capOk && !w2 && v2 === 210, lv: false, notes: notes };
     }
+    // 三相：代表例（auto）を決める
+    let auto, allowed, hc = null;
+    if (lv) {
+      auto = [v2 > 300 ? 'Dyn11' : 'Yd1'];
+    } else if (v2 > 300) {
+      auto = ['Dyn11'];
+    } else {
+      const pick = function (rows) {
+        for (let i = 0; i < rows.length; i++) { if (kva <= rows[i][0]) { return rows[i][1]; } }
+        return rows[rows.length - 1][1];
+      };
+      auto = pick(J.threeConn).slice();
+      hc = pick(H.conn210);
+      if (auto.length > 1 && auto.indexOf(hc) > 0) { auto.splice(auto.indexOf(hc), 1); auto.unshift(hc); }
+    }
+    allowed = auto.slice();
+    const sel = o.conn && CONN_NAMES[o.conn] && !o.n ? o.conn : null;
+    const codes = sel ? [sel] : auto;
+    const res = { codes: codes, auto: auto, selected: !!sel, hitachi: sel ? null : hc, lv: lv, notes: notes };
+    if (lv) {
+      res.std = false;
+      return res;
+    }
+    if (!v1Ok) { notes.push('JIS C 4304/4306 は 6kV 配電用です（一次 ' + v1 + 'V は対象外、結線は参考）。'); }
     const capOk = J.capacities.three.indexOf(kva) >= 0;
     if (!capOk) { notes.push('容量 ' + kva + 'kVA は JIS 表3 の定格容量外です（結線は容量範囲による代表例）。'); }
-    if (v2 > 300) {
+    const selOut = sel && allowed.indexOf(sel) < 0;
+    if (selOut) {
+      notes.push('選択した結線 ' + CONN_NAMES[sel] + ' は JIS 標準外です（' + (v2 > 300 ? 'JIS 表6：二次 420/440V は Δ-Y 中性点端子付き' : 'JIS 表19：' + kva + 'kVA・210V は ' + allowed.map(function (c) { return CONN_NAMES[c]; }).join(' 又は ')) + '）。');
+    }
+    if (codes[0] === 'Dyn11') {
       const vOk = v2 === J.v2.threeN[f];
       const kOk = J.dynKva.indexOf(kva) >= 0;
       const jem = !kOk && H.dynKva.indexOf(kva) >= 0;
-      if (!vOk) { notes.push('JIS 表6 の Δ-Y（中性点端子付き）の定格二次電圧は 420V（50Hz）・440V（60Hz）です（選択中 ' + f + 'Hz）。'); }
-      if (jem) {
+      if (v2 > 300 && !vOk) { notes.push('JIS 表6 の Δ-Y（中性点端子付き）の定格二次電圧は 420V（50Hz）・440V（60Hz）です（選択中 ' + f + 'Hz）。'); }
+      if (!selOut && jem) {
         notes.push('JIS 表19 の Δ-Y（中性点端子付き）は 1500・2000kVA です。' + kva + 'kVA は JEM 1520/1521 準拠の標準品（' + H.name + '）。');
-      } else if (!kOk && capOk) {
+      } else if (!selOut && !kOk && capOk) {
         notes.push('JIS 表19 の Δ-Y（中性点端子付き）は 1500・2000kVA です（日立標準品は 75kVA 以上）。');
       }
-      return { codes: ['Dyn11'], std: v1Ok && capOk && vOk && kOk, jem: v1Ok && vOk && jem, lv: false, notes: notes };
+      res.std = v1Ok && capOk && vOk && kOk && !selOut;
+      res.jem = v1Ok && vOk && jem && !selOut;
+      return res;
     }
-    const pick = function (rows) {
-      for (let i = 0; i < rows.length; i++) { if (kva <= rows[i][0]) { return rows[i][1]; } }
-      return rows[rows.length - 1][1];
-    };
-    const codes = pick(J.threeConn).slice();
-    const hc = pick(H.conn210);
-    if (codes.length > 1 && codes.indexOf(hc) > 0) { codes.splice(codes.indexOf(hc), 1); codes.unshift(hc); }
-    if (v2 !== J.v2.three[0]) { notes.push('JIS 表6 の三相定格二次電圧（Y-Y・Y-Δ・Δ-Δ）は 210V です。'); }
-    if (J.dynKva.indexOf(kva) >= 0) { notes.push('JIS 表19 では 1500・2000kVA は Δ-Δ（210V）又は Δ-Y 中性点端子付き（420/440V）です。'); }
-    return { codes: codes, hitachi: hc, std: v1Ok && capOk && v2 === J.v2.three[0], lv: false, notes: notes };
+    if (v2 !== J.v2.three[0] && !selOut) { notes.push('JIS 表6 の三相定格二次電圧（Y-Y・Y-Δ・Δ-Δ）は 210V です。'); }
+    if (!sel && J.dynKva.indexOf(kva) >= 0) { notes.push('JIS 表19 では 1500・2000kVA は Δ-Δ（210V）又は Δ-Y 中性点端子付き（420/440V）です。'); }
+    res.std = v1Ok && capOk && v2 === J.v2.three[0] && !selOut;
+    return res;
   }
 
   // タップ電圧と二次電圧（JIS 表4）：二次電圧 = 受電電圧 × 定格二次電圧 / タップ電圧（無負荷時）
@@ -606,7 +636,7 @@
 
     return {
       input: { mode: mode, kva: kva, v1: v1, v2: v2, trType: trType, kva1: kva1 },
-      winding: jisWinding(mode, kva, v1, v2, input.freq),
+      winding: jisWinding(mode, kva, v1, v2, input.freq, { wires: Number(input.wires) === 2 ? 2 : 3, conn: input.conn, n: input.uiMode === 'three4w' }),
       hv: hv, circuits: circuits,
       z: { tr: zTr, trIsDefault: !(zInput > 0), src: zSrc, total: zTotal },
       i1: i1, i2: i2, iscKa: iscKa, jis: jis, iscRef: iscRef,
@@ -618,7 +648,7 @@
 
   const api = {
     calculate: calculate, ratedCurrent: ratedCurrent, defaultZ: defaultZ, sourceZ: sourceZ,
-    pickAtLeast: pickAtLeast, todoRow: todoRow, selectPrimaryMitsubishi: selectPrimaryMitsubishi, selectPrimaryFuji: selectPrimaryFuji, jisWinding: jisWinding, tapTable: tapTable, jisRow: jisRow, guideRow: guideRow, jisAt: jisAt, todoSplit: todoSplit, selectCable: selectCable, selectBusbar: selectBusbar,
+    pickAtLeast: pickAtLeast, todoRow: todoRow, selectPrimaryMitsubishi: selectPrimaryMitsubishi, selectPrimaryFuji: selectPrimaryFuji, jisWinding: jisWinding, CONN_NAMES: CONN_NAMES, tapTable: tapTable, jisRow: jisRow, guideRow: guideRow, jisAt: jisAt, todoSplit: todoSplit, selectCable: selectCable, selectBusbar: selectBusbar,
     selectBreaker: selectBreaker, selectBranch: selectBranch, selectCT: selectCT, selectTHR: selectTHR, selectFuse: selectFuse,
     selectEB: selectEB, data: D
   };

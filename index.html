@@ -28,10 +28,11 @@
 
     <div class="field">
       <span class="label">電源相</span>
-      <div class="seg seg4 seg5" role="radiogroup">
-        <label><input type="radio" name="mode" value="three" checked><span>三相</span></label>
-        <label><input type="radio" name="mode" value="three4w"><span>三相<br><small>4線式</small></span></label>
-        <label><input type="radio" name="mode" value="single"><span>単相</span></label>
+      <div class="seg seg6" role="radiogroup">
+        <label><input type="radio" name="mode" value="three" checked><span>三相3線</span></label>
+        <label><input type="radio" name="mode" value="three4w"><span>三相4線</span></label>
+        <label><input type="radio" name="mode" value="single2w"><span>単相2線</span></label>
+        <label><input type="radio" name="mode" value="single3w"><span>単相3線</span></label>
         <label><input type="radio" name="mode" value="scott"><span>スコット</span></label>
         <label><input type="radio" name="mode" value="todo"><span>灯動</span></label>
       </div>
@@ -164,6 +165,7 @@
       <li>単相3線式の105V側短絡電流は210V側の値と異なります。</li>
       <li>スコット変圧器の二次側は M座・T座 各 容量/2 の単相回路として計算し、同じ機器を2回路分選定します。B種接地（EB）は各座の中点 o1・o2 から取ります。</li>
       <li>結線図はベクトル図の角度で示しています。単相・三相（6kV/低圧）は JIS C 4304（油入）・C 4306（モールド）表18〜20 により、三相210V は 20〜50kVA Y-Y（Yy0）、75〜500kVA Y-Δ（Yd1：二次30°遅れ）、750・1000kVA Δ-Δ（Dd0、日立標準。JIS では Y-Δ も可）、1500・2000kVA Δ-Δ、420V(50Hz)/440V(60Hz) は Δ-Y 中性点端子付き（Dyn11：二次30°進み。JIS は 1500・2000kVA、75〜1000kVA は JEM 1520/1521 準拠の日立標準品）です。JIS は 6kV 配電用のため、3.3kV などは参考表示です。低圧/低圧・スコット（二次90°）・灯動はメーカーカタログの代表例です。実機は銘板・仕様書で確認してください。</li>
+      <li>三相3線は結線図の欄で結線（Y-Y・Y-Δ・Δ-Δ・Δ-Y）を選べます。最初は代表例を表示し、JIS（表19・表6）にない結線を選ぶと注意を表示します。結線図の下の二次側電圧（線間・対地）は無負荷・定格電圧の値です。単相2線は一端接地、単相3線は中性点接地としています。</li>
       <li>三相4線式は線間電圧で三相と同じ計算です。灯動共用変圧器（日立 SuperトップランナーⅢ 70〜150kVA／三菱 Rシリーズ ダブルパワー 50〜500kVA）は一次・LBSヒューズを定格容量の三相変圧器として選定し、二次は負荷配分曲線上の配分（三相側か単相側の一方を入力、空欄は曲線の折れ点）で三相側・単相側をそれぞれ選定します。曲線は各社カタログのグラフからの読取値です。%Zは日立は特性表の周波数別の値、三菱は保証値範囲の下限（安全側）、短絡電流は簡易計算です。EBの一相分容量は単相分＋三相分÷3としています。</li>
       <li>LBSヒューズは三菱 表5(1)/5(2)、富士 JCシリーズ標準選定表（カタログ転記）によります。表にない容量は直近上位容量の行で選定します。</li>
       <li>変圧器二次側母線（電線・銅バー）は主幹ブレーカーありの場合はその定格以上、なしの場合は二次定格電流以上で選定しています。母線の電線は社内規準の許容電流表（IV・FP 60℃・HIV・EM-IE・EM-LMFC 75℃）によります。電線は最小5.5sq、2条引きまで（JSIA：1本の許容電流は回路電流の60%以上）とし、超える場合は銅バーのみです。EBは内線規程 表2.13.1によります（分岐・主幹ブレーカーのサイズによっては表2.13.2 によりサイズアップ。目安を併記）。電圧降下・布設条件の低減は別途検討してください。</li>

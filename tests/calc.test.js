@@ -624,3 +624,30 @@ test('分岐の必要 Icu はフレームの最大定格の列（三菱 63AF は
   assert.strictEqual(fj.find((x) => x.af === 50).jisCol, 60);
   assert.strictEqual(fj.find((x) => x.af === 63).jisCol, 125); // 富士 63AF は 63A まで
 });
+
+test('結線の選択：既定は代表例、JIS 外の選択は注意', () => {
+  const auto = C.calculate({ mode: 'three', kva: 300, v1: 6600, v2: 210 });
+  assert.deepStrictEqual(auto.winding.codes, ['Yd1']);
+  assert.strictEqual(auto.winding.selected, false);
+  const dd = C.calculate({ mode: 'three', kva: 300, v1: 6600, v2: 210, conn: 'Dd0' });
+  assert.deepStrictEqual(dd.winding.codes, ['Dd0']);
+  assert.strictEqual(dd.winding.std, false);
+  assert.ok(dd.winding.notes.some((n) => n.indexOf('JIS 標準外') >= 0));
+  const ok = C.calculate({ mode: 'three', kva: 1000, v1: 6600, v2: 210, conn: 'Yd1' }); // 表19 で可
+  assert.strictEqual(ok.winding.std, true);
+  assert.ok(!ok.winding.notes.some((n) => n.indexOf('JIS 標準外') >= 0));
+  const dy = C.calculate({ mode: 'three', kva: 300, v1: 6600, v2: 210, conn: 'Dyn11' });
+  assert.ok(dy.winding.notes.some((n) => n.indexOf('JIS 標準外') >= 0));
+  // 三相4線は Dyn11 固定（選択は無視）
+  const n4 = C.calculate({ mode: 'three4w', uiMode: 'three4w', kva: 300, v1: 6600, v2: 420, conn: 'Yy0' });
+  assert.deepStrictEqual(n4.winding.codes, ['Dyn11']);
+  // 単相2線は JIS 標準外の注意
+  const s2 = C.calculate({ mode: 'single', kva: 50, v1: 6600, v2: 105, wires: 2 });
+  assert.strictEqual(s2.winding.std, false);
+  assert.deepStrictEqual(s2.winding.codes, ['単相2線']);
+});
+
+test('灯動は JIS 結線判定の対象外', () => {
+  const r = C.calculate({ mode: 'todo', kva: 100, v1: 6600, v2: 210, todoMaker: 'hitachi' });
+  assert.strictEqual(r.winding, null);
+});

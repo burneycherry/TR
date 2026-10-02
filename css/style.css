@@ -91,6 +91,9 @@ input:focus, select:focus { outline: 2px solid #4a90d9; outline-offset: 0; borde
 .seg5 span { font-size: 13px; letter-spacing: -0.5px; }
 .seg4 label + label span { border-left: 1px solid #1f4e79; }
 .seg span small { font-size: 10px; font-weight: 400; }
+.seg6 { display: grid; grid-template-columns: 1fr 1fr 1fr; }
+.seg6 label:nth-child(3n+2) span, .seg6 label:nth-child(3n) span { border-left: 1px solid #1f4e79; }
+.seg6 label:nth-child(n+4) span { border-top: 1px solid #1f4e79; }
 .seg4 span { padding: 6px 0; line-height: 1.25; height: 100%; display: flex; flex-direction: column; justify-content: center; }
 .manual { margin-top: 6px; }
 [hidden] { display: none !important; }
@@ -190,6 +193,7 @@ table.res tr.pick th, table.res tr.pick td { background: #eaf2fb; }
   .seg { border-color: #4a90d9; }
   .seg span { color: #8cbcf0; }
   .seg4 label + label span { border-left-color: #4a90d9; }
+  .seg6 label span { border-color: #4a90d9; }
   .seg input:checked + span { background: #2c6aa8; color: #ffffff; }
   .chips button { background: #0f1720; border-color: #34414f; color: #e4e9ef; }
   .chips button.on { background: #2c6aa8; border-color: #2c6aa8; }
