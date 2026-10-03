@@ -27,6 +27,22 @@
     <h2>入力</h2>
 
     <div class="field">
+      <span class="label">周波数（%Z 標準値・JIS C 4620 表・JIS 二次420/440V に使用）</span>
+      <div class="seg" role="radiogroup">
+        <label><input type="radio" name="freq" value="50" checked><span>50Hz</span></label>
+        <label><input type="radio" name="freq" value="60"><span>60Hz</span></label>
+      </div>
+    </div>
+
+    <div class="field">
+      <span class="label">変圧器種別（%Z 標準値・富士ヒューズ・JIS C 4620 表に使用）</span>
+      <div class="seg" role="radiogroup">
+        <label><input type="radio" name="trType" value="oil" checked><span>油入</span></label>
+        <label><input type="radio" name="trType" value="mold"><span>モールド</span></label>
+      </div>
+    </div>
+
+    <div class="field">
       <span class="label">電源相</span>
       <div class="seg seg6" role="radiogroup">
         <label><input type="radio" name="mode" value="three" checked><span>三相3線</span></label>
@@ -38,12 +54,9 @@
       </div>
     </div>
 
-    <div class="field">
-      <span class="label">変圧器種別（富士ヒューズ選定に使用）</span>
-      <div class="seg" role="radiogroup">
-        <label><input type="radio" name="trType" value="oil" checked><span>油入</span></label>
-        <label><input type="radio" name="trType" value="mold"><span>モールド</span></label>
-      </div>
+    <div class="field" id="connField" hidden>
+      <label class="label" for="connSel">結線（既定は代表例）</label>
+      <select id="connSel"></select>
     </div>
 
     <div class="field" id="todoMakerField" hidden>
@@ -86,14 +99,6 @@
       </div>
       <input id="vvxLoad" type="number" inputmode="decimal" min="0" step="any" placeholder="空欄=三相最大" style="margin-top:8px">
       <p class="sub-note" id="vvxInfo"></p>
-    </div>
-
-    <div class="field">
-      <span class="label">周波数（JIS C 4620 表・JIS 二次420/440V・灯動の %Z に使用）</span>
-      <div class="seg" role="radiogroup">
-        <label><input type="radio" name="freq" value="50" checked><span>50Hz</span></label>
-        <label><input type="radio" name="freq" value="60"><span>60Hz</span></label>
-      </div>
     </div>
 
     <div class="field" id="freqField" hidden>

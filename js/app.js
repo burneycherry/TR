@@ -39,7 +39,7 @@
     kva1: $('kva1'), kva1Field: $('kva1Field'), todoLoad: $('todoLoad'),
     kvaSel: $('kvaSel'), results: $('results'), err: $('inputErr'), toast: $('toast'),
     tap: $('tap'), tapSupply: $('tapSupply'),
-    kvaB: $('kvaB'), pf1: $('pf1'), pf3: $('pf3'), vvxLoad: $('vvxLoad')
+    kvaB: $('kvaB'), pf1: $('pf1'), pf3: $('pf3'), vvxLoad: $('vvxLoad'), connSel: $('connSel')
   };
   let lastText = '';
 
@@ -440,21 +440,25 @@
       src = '代表例（三菱 油入変圧器カタログ L-10034-H・日立 灯動共用 製品ページ）';
     }
     if (wd && wd.selected) { src = wd.lv ? '低圧/低圧は JIS C 4304/4306 の対象外' : (wd.codes[0] === 'Vvx' ? (wd.lead !== false ? '進み接続（単相負荷 u-v＝共用）' : '遅れ接続（単相負荷 v-w＝共用）') + '。参考：日本電気技術者協会 異容量V‐V結線方式 第1表' : wd.codes[0] === 'Vv0' ? '単相変圧器は ' + D.jisTr.name + ' 表3・表5（単三専用 210-105V の u-v 間を使用）' : D.jisTr.name + ' 表19 で確認'); }
-    // 結線の選択（三相3線のみ）：既定は代表例
-    let selHtml = '';
-    if ((inp.uiMode === 'three' || inp.uiMode === 'three4w') && wd) {
-      const autoName = wd.auto.map(function (c) { return C.CONN_NAMES[c]; }).join(' 又は ');
-      selHtml = '<div class="field" style="margin:0 0 8px"><label class="label" for="connSel">結線（既定は代表例）</label><select id="connSel">' +
-        '<option value="">代表例：' + esc(autoName) + '</option>' +
-        C.CONN_OPTIONS[inp.uiMode].map(function (c) {
-          const out2 = !wd.lv && c !== 'Vv0' && c !== 'Vvx' && wd.auto.indexOf(c) < 0;
-          return '<option value="' + c + '"' + (wd.selected && wd.codes[0] === c ? ' selected' : '') + '>' + esc(C.CONN_NAMES[c]) + (out2 ? '（JIS外）' : '') + '</option>';
-        }).join('') + '</select></div>';
-    }
-    return selHtml + '<svg class="wd" viewBox="0 0 340 168" role="img" aria-label="結線図">' + out.join('') + '</svg>' +
+    return '<svg class="wd" viewBox="0 0 340 168" role="img" aria-label="結線図">' + out.join('') + '</svg>' +
       '<p class="sub-note">' + esc(name) + '。' + esc(src) + '。実機は銘板・仕様書で確認。</p>' +
       (wd ? wd.notes.map(function (w) { return '<div class="warn">' + esc(w) + '</div>'; }).join('') : '') +
       secVoltHtml(secVolts(r, inp));
+  }
+
+  // 結線の選択（入力欄 #connSel、三相3線・三相4線のみ）：既定は代表例。選択肢の JIS外 表示は計算結果で決まる
+  function buildConn(r, inp) {
+    const wd = r.winding;
+    const show = (inp.uiMode === 'three' || inp.uiMode === 'three4w') && !!wd;
+    $('connField').hidden = !show;
+    if (!show) { return; }
+    const autoName = wd.auto.map(function (c) { return C.CONN_NAMES[c]; }).join(' 又は ');
+    el.connSel.innerHTML = '<option value="">代表例：' + esc(autoName) + '</option>' +
+      C.CONN_OPTIONS[inp.uiMode].map(function (c) {
+        const out2 = !wd.lv && c !== 'Vv0' && c !== 'Vvx' && wd.auto.indexOf(c) < 0;
+        return '<option value="' + c + '">' + esc(C.CONN_NAMES[c]) + (out2 ? '（JIS外）' : '') + '</option>';
+      }).join('');
+    el.connSel.value = wd.selected ? wd.codes[0] : '';
   }
 
   function render(r, inp) {
@@ -794,9 +798,11 @@
       $('todoSplit').textContent = '';
     }
     el.z.placeholder = '標準 ' + (tr ? (inp.freq === 60 ? tr.z60 : tr.z50) : C.defaultZ(todo ? 'three' : inp.mode, inp.kva || 0, inp.v2, inp.trType, inp.freq)) + '%';
+    $('connField').hidden = !(inp.uiMode === 'three' || inp.uiMode === 'three4w');
     try {
       const r = C.calculate(inp);
       el.err.textContent = '';
+      buildConn(r, inp);
       render(r, inp);
     } catch (e) {
       el.err.textContent = e.message;
@@ -889,14 +895,12 @@
     [el.kva, el.z, el.isc, el.kva1, el.v1m, el.v2m, el.todoLoad, el.tapSupply, el.pf1, el.pf3, el.vvxLoad].forEach(function (i) { i.addEventListener('input', update); });
     el.kvaB.addEventListener('change', update);
     el.tap.addEventListener('change', update);
-    // 結線図カード内の結線選択（描画のたびに作り直すので委譲で受ける）
-    el.results.addEventListener('change', function (e) {
-      if (e.target && e.target.id === 'connSel') {
-        const wasVv = isVv();
-        connChoice = e.target.value;
-        if (wasVv !== isVv()) { buildKva(voltValue(el.kvaSel, el.kva)); }
-        update();
-      }
+    // 結線の選択
+    el.connSel.addEventListener('change', function () {
+      const wasVv = isVv();
+      connChoice = el.connSel.value;
+      if (wasVv !== isVv()) { buildKva(voltValue(el.kvaSel, el.kva)); }
+      update();
     });
     [[el.kvaSel, el.kva], [el.v1, el.v1m], [el.v2, el.v2m]].forEach(function (p) {
       p[0].addEventListener('change', function () {
