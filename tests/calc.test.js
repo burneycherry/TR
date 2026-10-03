@@ -759,3 +759,8 @@ test('JIS C 4620 解説表2（モールド）・表1 の修正値', () => {
   const c = C.calculate({ mode: 'three', kva: 300, v1: 6600, v2: 210, trType: 'mold' });
   assert.strictEqual(c.branch.makers.mitsubishi.rows[0].needKa, 12.8);
 });
+
+test('異容量V結線：共用 ≤ 専用 は分かるエラー', () => {
+  assert.throws(() => C.calculate({ mode: 'three', conn: 'Vvx', kva: 50, kvaB: 50, v1: 6600, v2: 210, trType: 'oil', freq: 50 }), /共用変圧器（50kVA）は専用変圧器（50kVA）より大きい/);
+  assert.throws(() => C.calculate({ mode: 'three', conn: 'Vvx', kva: 30, kvaB: 50, v1: 6600, v2: 210, trType: 'oil', freq: 50 }), /より大きい容量/);
+});

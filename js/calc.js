@@ -528,6 +528,8 @@
   //   共用 Tk = √(P1² + P3²/3 + (2/√3)·P1·P3·cos(30° + φ))、φ = 進み θ3−θ1 ／ 遅れ θ1−θ3、専用 Ts = P3/√3
   // side：'three'＝三相 P3 を入力、'single'＝単相 P1 を入力、'pct'＝三相を最大（√3·Ts）の % で指定。空欄は三相最大（第2表の条件）
   function vvxSplit(tk, ts, side, value, pf1, pf3, lead) {
+    // 異容量V結線は共用（電灯＋動力）が専用より大きい前提（日本電気技術者協会 第1表）
+    if (tk > 0 && ts > 0 && tk <= ts) { return { error: '共用変圧器（' + tk + 'kVA）は専用変圧器（' + ts + 'kVA）より大きい容量にしてください（同容量は V-V を選択）。' }; }
     const p1f = pf1 > 0 && pf1 <= 1 ? pf1 : 1;
     const p3f = pf3 > 0 && pf3 <= 1 ? pf3 : p1f; // 未入力は単相と同じ力率（(3)(4)式の前提）
     const t1 = Math.acos(p1f);
