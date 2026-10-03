@@ -223,7 +223,7 @@
     return h;
   }
 
-  // キュービクルの遮断容量の表（JIS C 4620 解説表1 優先、無い範囲は認定の手引き 補足表1）
+  // キュービクルの遮断容量の表（JIS C 4620 解説表1（油入）・表2（モールド）優先、無い範囲は認定の手引き 補足表1）
   function tblLine(j) {
     return j.ratings.map(function (x, i) { return x + 'A以下 ' + (j.values[i] === null ? '—' : fmt(j.values[i], 1) + 'kA'); }).join('／');
   }
@@ -231,11 +231,11 @@
     const j = rc.jis;
     if (!j) {
       return inp.iscBasis === 'jis' && (rc.input.mode === 'three' || rc.input.mode === 'single') ?
-        '<p class="sub-note">JIS C 4620 解説表1・認定の手引き 補足表1 の対象外のため計算値でブレーカーを選定</p>' : '';
+        '<p class="sub-note">JIS C 4620 解説表1・2・認定の手引き 補足表1 の対象外のため計算値でブレーカーを選定</p>' : '';
     }
     const head = esc(j.name) + '（' + (j.src === 'jis' ? j.freq + 'Hz・' : j.circuit + '・') + j.kva + 'kVA' + (j.exact ? '' : '：直近上位の行') + '）';
     let h = '<p class="sub-note"><strong>' + head + 'でブレーカーを選定</strong><br>' + tblLine(j) + '<br>' +
-      (j.src === 'jis' ? 'JIS C 4304 調査値（短絡電流の最大値）。' : 'JIS C 4620 解説表1 に無い範囲のため手引きで補完。') +
+      (j.src === 'jis' ? 'JIS C 4304 調査値（短絡電流の最大値）。' : 'JIS C 4620 解説表1・2 に無い範囲のため手引きで補完。') +
       j.ratings[j.ratings.length - 1] + 'A 超は計算値。</p>';
     if (rc.iscRef) {
       const g = rc.iscRef;

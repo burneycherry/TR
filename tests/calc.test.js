@@ -746,3 +746,16 @@ test('エナジーサポート カットアウト（PC）用ヒューズ・適�
   const c = C.fuseEnergys(E, 'three', 100, 6600, 50, null);
   assert.strictEqual(c.cutout.ok, false); // 1φ＋3φ一括のカットアウト表は無し
 });
+
+test('JIS C 4620 解説表2（モールド）・表1 の修正値', () => {
+  const r = (m, k, f, t) => C.jisRow(m, k, 6600, 210, f, t);
+  assert.deepStrictEqual(r('three', 300, 50, 'mold').values, [12.8, 18.0, 20.4, 20.6, 20.7]);
+  assert.deepStrictEqual(r('three', 750, 60, 'mold').values, [15.7, 27.0, 34.0, 34.7, 34.9]);
+  assert.deepStrictEqual(r('single', 100, 60, 'mold').values, [9.0, 11.8, 13.1, 13.3, 13.3]);
+  assert.deepStrictEqual(r('single', 500, 50, 'mold').values, [14.0, 25.7, 34.2, 35.0, 35.3]);
+  assert.ok(r('three', 300, 50, 'mold').name.indexOf('解説表2') >= 0);
+  assert.deepStrictEqual(r('single', 100, 60, 'oil').values, [10.0, 14.1, 16.5, 16.7, 16.8]); // 表1 単相60Hz 100kVA
+  // 計算に反映：モールド 三相300kVA 50Hz の分岐 63AF（50A まで→60A以下列）は 12.8kA
+  const c = C.calculate({ mode: 'three', kva: 300, v1: 6600, v2: 210, trType: 'mold' });
+  assert.strictEqual(c.branch.makers.mitsubishi.rows[0].needKa, 12.8);
+});

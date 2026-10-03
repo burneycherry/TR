@@ -257,14 +257,16 @@
   }
 
   // JIS C 4620 解説表1：三相/単相 × 6.6kV × 210V級 × 表の容量のとき行を返す（表にない容量は直近上位行）
-  function jisRow(mode, kva, v1, v2, freq) {
-    const J = D.jisC4620;
+  // 油入＝解説表1、モールド＝解説表2（trType）
+  function jisRow(mode, kva, v1, v2, freq, trType) {
+    const J0 = D.jisC4620;
+    const J = trType === 'mold' ? J0.mold : J0;
     if (!(mode === 'three' || mode === 'single')) { return null; }
     if (!(v1 >= 6000 && v1 <= 7200) || !(v2 >= 200 && v2 <= 220)) { return null; }
     const t = J[mode][Number(freq) === 60 ? 60 : 50];
     for (let i = 0; i < t.length; i++) {
       if (kva <= t[i][0]) {
-        return { src: 'jis', name: J.name, ratings: J.ratings, kva: t[i][0], exact: t[i][0] === kva, values: t[i][1], freq: Number(freq) === 60 ? 60 : 50 };
+        return { src: 'jis', name: J.name, ratings: J0.ratings, kva: t[i][0], exact: t[i][0] === kva, values: t[i][1], freq: Number(freq) === 60 ? 60 : 50 };
       }
     }
     return null;
@@ -816,7 +818,7 @@
     // 遮断容量の基準：キュービクルは JIS C 4620 解説表1 を優先（適用できない条件は計算値）
     // JIS C 4620 解説表1 を優先し、JIS に無い範囲は認定の手引き 補足表1 で補完（ユーザー指定）
     // V結線は JIS C 4620・認定の手引きの表の対象外 → 計算値
-    const jisOnly = input.iscBasis === 'calc' || vv ? null : jisRow(mode, kva, v1, v2, input.freq);
+    const jisOnly = input.iscBasis === 'calc' || vv ? null : jisRow(mode, kva, v1, v2, input.freq, trType);
     const guide = input.iscBasis === 'calc' || vv ? null : guideRow(mode, kva, v1, v2);
     const jis = jisOnly || guide;
     const iscRef = jisOnly ? guide : null; // 両表がある範囲は手引きの値も参考表示
