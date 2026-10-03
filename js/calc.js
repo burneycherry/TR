@@ -377,7 +377,7 @@
     const E = D.eb;
     const res = { phaseKva: phaseKva, voltClass: ['100V級', '200V級', '400V級'][col], sq: null, sizeUp: [], t2Max: E.table2[E.table2.length - 1][0], verified: E.verified };
     for (let i = 0; i < E.table.length; i++) {
-      if (phaseKva <= E.table[i][col]) { res.sq = E.table[i][3]; break; }
+      if (phaseKva <= E.table[i][col]) { res.sq = E.table[i][3]; res.naisen = E.table[i][5] === 'KK' ? null : E.table[i][4]; res.kk = E.table[i][5] === 'KK'; break; }
     }
     res.label = res.sq !== null ? res.sq + 'mm²' : null;
     if (res.sq !== null) {

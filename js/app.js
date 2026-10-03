@@ -714,8 +714,8 @@
       const upLine = upTxt.length ? '<span class="up">⚠ サイズアップ有<br>' + upTxt.map(esc).join('<br>') + '</span>' : '';
       const eb = '<div class="kv">' + kvItem('EB 接地線', (e.label ? esc(e.label) : '個別検討') + upLine, '') +
         kvItem('一相分容量', fmt(e.phaseKva, 1), 'kVA') + '</div>' +
-        '<p class="sub-note">表2.13.1（' + e.voltClass + '）：' + (e.sq !== null ? e.sq + 'mm²' : '範囲外') + '</p>' + up +
-        '<p class="sub-note">B種接地工事の接地線の太さ（' + e.voltClass + '・銅線）。一相分容量：三相=定格÷3、単相=定格、スコット=定格÷2、灯動共用=単相分＋三相分÷3、同容量V結線=単相1台分、異容量V結線=大きい容量の単相変圧器（表2.13.1 備考(1)(ウ)）。単相3線式は200V級を適用。<br>' + esc(D.eb.note) + '</p>';
+        '<p class="sub-note">内線規程 1350-5表・表2.13.1（' + e.voltClass + '）：' + (e.sq === null ? '範囲外（内線規程 資料1-3-6 により個別検討）' : e.sq + 'mm²' + (e.kk ? '（内線規程の表は超過、公共建築工事標準仕様書 表2.13.1 の値）' : (e.naisen && e.naisen !== e.sq + 'mm²' ? '（内線規程は ' + e.naisen + ' 以上）' : ''))) + '</p>' + up +
+        '<p class="sub-note">B種接地工事の接地線の太さ（' + e.voltClass + '・銅線）。一相分容量：三相=定格÷3、単相=定格、スコット=定格÷2、灯動共用=単相分＋三相分÷3、同容量V結線=単相1台分、異容量V結線=大きい容量の単相変圧器（1350-5表 備考2・表2.13.1 備考(1)(ウ)）。多線式は最大使用電圧で適用（単相3線式は200V級）。<br>' + esc(D.eb.note) + '</p>';
       html += card('EB（B種接地線）サイズ', eb, e.verified === false);
       t.push('EB: ' + (e.label || '個別検討') + (e.sizeUp.length ? '（ブレーカー ' + e.baseMax + 'A超は表2.13.2でサイズアップ：' + e.sizeUp.map(function (u) { return '〜' + u.to + 'A ' + u.label; }).join('、') + (e.maxByMain ? '・主幹' : '')  + '）' : ''));
     }

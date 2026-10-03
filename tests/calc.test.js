@@ -764,3 +764,21 @@ test('異容量V結線：共用 ≤ 専用 は分かるエラー', () => {
   assert.throws(() => C.calculate({ mode: 'three', conn: 'Vvx', kva: 50, kvaB: 50, v1: 6600, v2: 210, trType: 'oil', freq: 50 }), /共用変圧器（50kVA）は専用変圧器（50kVA）より大きい/);
   assert.throws(() => C.calculate({ mode: 'three', conn: 'Vvx', kva: 30, kvaB: 50, v1: 6600, v2: 210, trType: 'oil', freq: 50 }), /より大きい容量/);
 });
+
+test('EB：内線規程 1350-5表（ユーザー提供画像）と資料1-3-6 の算定基礎', () => {
+  const D = require('../js/data.js');
+  // 1350-5表：100V級・200V級・400V級 → 銅
+  const rows = [[5, 10, 20, '2.6mm'], [10, 20, 40, '3.2mm'], [20, 40, 75, '14mm²'], [40, 75, 150, '22mm²'],
+    [60, 125, 250, '38mm²'], [75, 150, 300, '60mm²'], [100, 200, 400, '60mm²'], [175, 350, 700, '100mm²']];
+  rows.forEach((r, i) => assert.deepStrictEqual(D.eb.table[i].slice(0, 3).concat(D.eb.table[i][4]), r));
+  assert.strictEqual(C.selectEB('single', 10, 210).naisen, '2.6mm');
+  assert.strictEqual(C.selectEB('single', 70, 105).sq, 60); // 100V級 60超〜75
+  assert.strictEqual(C.selectEB('three', 1500, 210).kk, true); // 一相500kVA は公共建築 表2.13.1 のみ
+  assert.strictEqual(C.selectEB('three', 1800, 210).sq, null);
+  // 表2.13.2 は A = 0.052·In 以上の最小サイズ（資料1-3-6）
+  const sizes = [2.0, 3.14, 5.5, 8, 14, 22, 38, 60, 100, 150];
+  D.eb.table2.forEach((t) => {
+    const need = D.eb.basisK * t[0];
+    assert.strictEqual(t[2], sizes.find((x) => x >= need - 1e-9), t[0] + 'A');
+  });
+});
