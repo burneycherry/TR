@@ -135,26 +135,45 @@
     }
     return null;
   }
-  // mode：single|three（スコット・灯動は三相表）、kva1：LBS 共用単相、vopt：{ vv: 1台 kVA } 同容量V／{ vvx: [共用, 専用] } 異容量V
-  function fuseEnergys(E, mode, kva, vc, kva1, vopt) {
-    if (vc !== 6600) { return { ok: false, msg: '6.6kV 以外は選定表の対象外' }; }
-    let items = [];
+  // ヒューズの適合ホルダー（選定ページ matrix2 と同じ照合）
+  function esHolders(E, model, value) {
+    const out = [];
+    E.holders.forEach(function (h) {
+      h[1].forEach(function (f) {
+        if (f[0] === model && f.slice(1).some(function (r) { return String(r) === String(value); })) { out.push(h[0]); }
+      });
+    });
+    return out;
+  }
+  // 1組の表（限流 or カットアウト）を引く
+  function esPick(E, set, mode, kva, kva1, vopt) {
+    const items = [];
     let method;
     if (vopt && (vopt.vv || vopt.vvx)) {
       const big = vopt.vv ? vopt.vv : Math.max(vopt.vvx[0], vopt.vvx[1]);
       const small = vopt.vv ? vopt.vv : Math.min(vopt.vvx[0], vopt.vvx[1]);
       method = (vopt.vv ? '同容量' : '変則') + 'V結線表（大 ' + big + 'kVA × 小 ' + small + 'kVA）';
-      E.vx.forEach(function (t) { const h = esLook2(t, big, small); if (h) { items.push({ model: t.model, value: h.value }); } });
+      (set.vx || []).forEach(function (t) { const h = esLook2(t, big, small); if (h) { items.push({ model: t.model, value: h.value }); } });
     } else if (mode !== 'single' && kva1 > 0) {
       method = '1φ＋3φ一括表（1φ ' + kva1 + 'kVA × 3φ ' + kva + 'kVA）';
-      E.combo.forEach(function (t) { const h = esLook2(t, kva1, kva); if (h) { items.push({ model: t.model, value: h.value }); } });
+      (set.combo || []).forEach(function (t) { const h = esLook2(t, kva1, kva); if (h) { items.push({ model: t.model, value: h.value }); } });
     } else {
-      const tbl = mode === 'single' ? E.single : E.three;
+      const tbl = mode === 'single' ? set.single : set.three;
       method = (mode === 'single' ? '1φ' : '3φ') + '表（' + kva + 'kVA）';
-      tbl.forEach(function (t) { const h = esLook1(t[1], t[2], kva); if (h) { items.push({ model: t[0], value: h.value, at: h.at, exact: h.exact }); } });
+      tbl.forEach(function (t) { const h = esLook1(t[1], t[2], kva); if (h) { items.push({ model: t[0], value: h.value }); } });
     }
-    if (!items.length) { return { ok: false, method: method, msg: '表の範囲外（該当なし）' }; }
-    return { ok: true, method: method, items: items, value: items.map(function (x) { return x.model + ' ' + x.value + 'A'; }).join('／') };
+    items.forEach(function (x) { x.holders = esHolders(E, x.model, x.value); });
+    return { method: method, items: items };
+  }
+  // mode：single|three（スコット・灯動は三相表）、kva1：LBS 共用単相、vopt：{ vv: 1台 kVA } 同容量V／{ vvx: [共用, 専用] } 異容量V
+  function fuseEnergys(E, mode, kva, vc, kva1, vopt) {
+    if (vc !== 6600) { return { ok: false, msg: '6.6kV 以外は選定表の対象外', cutout: { ok: false, msg: '6.6kV 以外は選定表の対象外' } }; }
+    const lim = esPick(E, E, mode, kva, kva1, vopt);
+    const cut = esPick(E, E.cutout, mode, kva, kva1, vopt);
+    const fmtI = function (x) { return x.model + ' ' + x.value + 'A'; };
+    const cutout = cut.items.length ? { ok: true, method: cut.method, items: cut.items, value: cut.items.map(fmtI).join('／') } : { ok: false, method: cut.method, msg: '該当なし' };
+    if (!lim.items.length) { return { ok: false, method: lim.method, msg: '表の範囲外（該当なし）', cutout: cutout }; }
+    return { ok: true, method: lim.method, items: lim.items, value: lim.items.map(fmtI).join('／'), cutout: cutout };
   }
   function selectFuse(mode, kva, v1, trType, kva1, vopt) {
     const L = D.lbs;

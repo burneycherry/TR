@@ -732,3 +732,17 @@ test('エナジーサポート（NGK）限流ヒューズ：選定ページの�
   const t = C.calculate({ mode: 'three', kva: 300, v1: 6600, v2: 210, kva1: 50 });
   assert.ok(t.fuse.energys.method.indexOf('一括') >= 0);
 });
+
+test('エナジーサポート カットアウト（PC）用ヒューズ・適合ホルダー', () => {
+  const E = C.data.lbs.makers.energys;
+  const r = C.fuseEnergys(E, 'three', 300, 6600, 0, null);
+  assert.strictEqual(r.cutout.value, 'FT 50A／FTS（PC-7、PC-7S） 50A／FTS（GAB、AB） 50A／FL 30A');
+  assert.deepStrictEqual(r.cutout.items[0].holders, ['PC-6', 'PC-6S', 'HPC-50', '3PC-50']);
+  assert.deepStrictEqual(r.items[0].holders, ['PFS-201Mシリーズ']); // PFG-1S 40A
+  const s = C.fuseEnergys(E, 'single', 50, 6600, 0, null);
+  assert.ok(s.cutout.value.indexOf('QC-1 15A') === 0); // PC 用限流 QC-1 も含む
+  const v = C.fuseEnergys(E, 'single', 100, 6600, 0, { vvx: [100, 50] });
+  assert.strictEqual(v.cutout.value, 'FL 20A'); // 変則V結線表
+  const c = C.fuseEnergys(E, 'three', 100, 6600, 50, null);
+  assert.strictEqual(c.cutout.ok, false); // 1φ＋3φ一括のカットアウト表は無し
+});

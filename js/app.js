@@ -186,6 +186,12 @@
     } catch (e) { return null; }
   }
 
+  // エナジーサポートのヒューズ一覧（定格＋適合ホルダー）
+  function esItems(items) {
+    return items.map(function (x) {
+      return '<strong>' + esc(x.model) + ' ' + esc(String(x.value)) + 'A</strong>' + (x.holders && x.holders.length ? '<br>' + note('ホルダー：' + esc(x.holders.join('・'))) : '');
+    }).join('<br>');
+  }
   function card(title, body, unverified) {
     return '<section class="card"><h2>' + title + (unverified ? ' <span class="badge">要確認</span>' : '') + '</h2>' + body + '</section>';
   }
@@ -567,10 +573,16 @@
         ev = '<strong>' + esc(es.msg) + '</strong>' + (es.method ? '<br>' + note(esc(es.method)) : '');
         t.push('LBSヒューズ(エナジーサポート): ' + es.msg);
       } else {
-        ev = es.items.map(function (x) { return '<strong>' + esc(x.model) + ' ' + x.value + 'A</strong>'; }).join('<br>') + '<br>' + note(esc(es.method));
+        ev = esItems(es.items) + '<br>' + note(esc(es.method));
         t.push('LBSヒューズ(エナジーサポート): ' + es.value);
       }
       fb += row(esc(es.name), ev);
+      // カットアウト（PC）用ヒューズ：非限流＋QC-1
+      const ec = es.cutout;
+      if (ec) {
+        fb += row(esc(es.name) + '<br><small>カットアウト（PC）</small>', ec.ok ? esItems(ec.items) + '<br>' + note(esc(ec.method)) : '<strong>' + esc(ec.msg) + '</strong>' + (ec.method ? '<br>' + note(esc(ec.method)) : ''));
+        t.push('カットアウトヒューズ(エナジーサポート): ' + (ec.ok ? ec.value : ec.msg));
+      }
       fb += '</table><p class="sub-note">三菱：' + esc(mi.note) + '<br>富士：' + esc(fu.note) + '<br>エナジーサポート：' + esc(es.note) + '</p>';
       f.warn.forEach(function (w) { fb += '<div class="warn">' + esc(w) + '</div>'; });
       html += card('LBS 限流ヒューズ（一次側）', fb, mi.verified === false || fu.verified === false || es.verified === false);
